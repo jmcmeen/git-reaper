@@ -44,3 +44,8 @@ class GitBackend(ABC):
     @abstractmethod
     def current_branch(self, repo: Path) -> str | None:
         """Current branch name, or None when detached or not a repo."""
+
+    @abstractmethod
+    def blame(self, repo: Path, rel_path: str) -> list[tuple[str, int]] | None:
+        """Per-line (author, author-time epoch), or None when blame fails
+        (untracked file, not a repo, no git)."""

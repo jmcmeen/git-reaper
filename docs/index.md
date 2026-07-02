@@ -1,23 +1,5 @@
 # git-reaper
 
-> A spooky utility for data mining git repositories (and any folder foolish
-> enough to hold still).
-
-```text
-                ______
-             .-"      "-.
-            /            \
-           |,  .-.  .-.  ,|
-           | )(_o/  \o_)( |
-           |/     /\     \|
-           (_     ^^     _)
-            \__|IIIIII|__/
-             | \IIIIII/ |
-             \          /
-              `--------`
-        g i t - r e a p e r
-```
-
 `git-reaper` reaps structured knowledge from repositories: it clones,
 gathers, concatenates, and packs the contents of a git repo (or a plain
 directory) into clean, portable artifacts. Library first; the CLI is a thin
@@ -40,6 +22,14 @@ reaper harvest https://github.com/Textualize/rich -o RICH.md
 
 # map a folder, any folder
 reaper tree . --sizes --lines
+
+# pack a repo for a model, then raise it back from the artifact
+reaper conjure . --sha256 -o PACKED.md
+reaper reanimate PACKED.md --out risen/ --verify
+
+# size the crypt and list the unfinished business
+reaper census .
+reaper unfinished . --age
 
 # is this thing alive?
 reaper pulse

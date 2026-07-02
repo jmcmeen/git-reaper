@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-02
+
+Deeper Digging. The conjure/reanimate round trip, repo analysis, and the
+grimoire.
+
+### Added
+
+#### Commands
+
+- `reaper conjure` - bundle a repo into a single LLM-ingestible artifact
+  (schema `conjure/v1`): provenance block, file tree, then every text file
+  inlined in deterministic sorted order. Fences are computed to outlast any
+  backtick run in the content, end markers gain a nonce when the content
+  fakes them, and `--sha256` records per-file hashes. `--split-tokens N`
+  shards the output into context-window-sized parts that each repeat the
+  provenance block with a `part: i/n` line.
+- `reaper reanimate` - the inverse of `conjure`: reconstruct a directory
+  tree from a packed artifact (sharded parts welcome). Writes to an empty
+  directory by default, `--force` to overwrite, `--verify` to check
+  per-file hashes. Absolute paths and `..` segments are refused outright.
+  The round trip is property-tested from birth:
+  `reanimate(conjure(tree)) == tree`, byte for byte, under adversarial
+  contents (nested fences, fake end markers, CRLF, missing final newlines,
+  unicode line separators).
+- `reaper census` - file-type census: counts, per-extension sizes, line
+  counts, language breakdown, and token estimate.
+- `reaper unfinished` - scan for TODO / FIXME / HACK / XXX markers with
+  file, line, and text; authors come from git blame when the source is a
+  repo, and `--age` adds how long each marker has haunted the codebase.
+- `reaper grimoire` - show effective configuration, where each value came
+  from, and stored recipes. Layers, weakest first: defaults,
+  `[tool.reaper]` in pyproject.toml, `.reaperrc` (TOML), environment.
+- `reaper cast <recipe>` - run a named recipe from the grimoire; extra
+  arguments pass through as overrides.
+
+#### Output and formats
+
+- CSV output (`--format csv`) for `census` and `unfinished`.
+- Non-UTF-8 text files are skipped with receipts when conjuring, so the
+  packed artifact is exactly reconstructible.
+
+#### Library
+
+- `git_reaper.config`: layered configuration and recipe loading.
+- `GitBackend.blame()` on the git backend abstraction.
+- Schema strings (`conjure/v1`, ...) and the `--schema` registry now derive
+  from one source, `git_reaper.schemas`.
+
 ## [0.1.0] - 2026-07-02
 
 The First Harvest. Initial release: the flagship gather-and-concatenate
@@ -66,5 +114,6 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jmcmeen/git-reaper/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jmcmeen/git-reaper/releases/tag/v0.1.0

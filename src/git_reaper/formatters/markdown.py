@@ -10,13 +10,23 @@ from pathlib import Path
 from typing import IO
 
 from git_reaper.fsutil import human_size
-from git_reaper.models import HarvestResult, Provenance, TreeNode, TreeResult
+from git_reaper.models import (
+    CensusResult,
+    HarvestResult,
+    Provenance,
+    TreeNode,
+    TreeResult,
+    UnfinishedResult,
+)
 
 _CHUNK = 65536
 
 
-def render_provenance(prov: Provenance, kind: str) -> str:
-    """The header block every combined artifact opens with."""
+def render_provenance(prov: Provenance, kind: str, extra: list[str] | None = None) -> str:
+    """The header block every combined artifact opens with.
+
+    `extra` lines (e.g. "part: 2/5" on conjure shards) land before the close.
+    """
     lines = [
         "<!--",
         f"git-reaper {kind}",
@@ -32,8 +42,9 @@ def render_provenance(prov: Provenance, kind: str) -> str:
         f"tool:      git-reaper {prov.tool_version}",
         f"invoked:   {prov.invoked}",
         f"files:     {prov.files}   tokens: ~{prov.token_estimate:,} (chars/4)",
-        "-->",
     ]
+    lines += extra or []
+    lines.append("-->")
     return "\n".join(lines) + "\n"
 
 
@@ -52,6 +63,44 @@ def write_harvest(result: HarvestResult, out: IO[str]) -> None:
         if not trailing_newline:
             out.write("\n")
         out.write(f"<!-- end {entry.path} -->\n")
+
+
+def render_census(result: CensusResult) -> str:
+    """Extension table, heaviest first."""
+    out = [render_provenance(result.provenance, "census")]
+    out.append("\n| extension | language | files | size | lines | ~tokens |")
+    out.append("| --- | --- | ---: | ---: | ---: | ---: |")
+    for stat in result.extensions:
+        out.append(
+            f"| {stat.extension} | {stat.language} | {stat.files} "
+            f"| {human_size(stat.size_bytes)} | {stat.line_count:,} "
+            f"| {stat.token_estimate:,} |"
+        )
+    out.append(
+        f"\n{result.total_files} files, {human_size(result.total_bytes)}, "
+        f"{result.total_lines:,} lines, ~{result.token_estimate:,} tokens (chars/4)"
+    )
+    return "\n".join(out) + "\n"
+
+
+def render_unfinished(result: UnfinishedResult) -> str:
+    """Marker report grouped by file."""
+    out = [render_provenance(result.provenance, "unfinished")]
+    current = None
+    for marker in result.markers:
+        if marker.path != current:
+            current = marker.path
+            out.append(f"\n## {marker.path}\n")
+        age = f"{marker.age_days}d old" if marker.age_days is not None else None
+        notes = [n for n in (marker.author, age) if n]
+        suffix = f"  ({', '.join(notes)})" if notes else ""
+        out.append(f"- line {marker.line} **{marker.marker}**: {marker.text}{suffix}")
+    if result.counts:
+        tally = ", ".join(f"{name}: {count}" for name, count in sorted(result.counts.items()))
+        out.append(f"\n{sum(result.counts.values())} markers ({tally})")
+    else:
+        out.append("\nnothing unfinished. suspicious.")
+    return "\n".join(out) + "\n"
 
 
 def render_tree(result: TreeResult, with_sizes: bool = False, with_lines: bool = False) -> str:

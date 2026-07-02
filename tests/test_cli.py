@@ -81,8 +81,8 @@ def test_every_visible_command_publishes_a_schema():
     # COMMAND_MODELS is the single registry; a new or renamed command must
     # register there, and every registered command must answer --schema.
     visible = {cmd.name for cmd in app.registered_commands if not cmd.hidden}
-    assert visible == set(schemas.COMMAND_MODELS)
-    for command in sorted(visible):
+    assert visible - schemas.SCHEMALESS_COMMANDS == set(schemas.COMMAND_MODELS)
+    for command in sorted(schemas.COMMAND_MODELS):
         result = runner.invoke(app, ["--plain", command, "--schema"])
         assert result.exit_code == 0, command
         schema = json.loads(result.stdout)
@@ -92,6 +92,53 @@ def test_every_visible_command_publishes_a_schema():
 def test_boo_is_wired():
     result = runner.invoke(app, ["boo"])
     assert result.exit_code == 0
+
+
+def test_conjure_reanimate_cli_round_trip(make_repo, tmp_path):
+    root = make_repo(FILES)
+    artifact = tmp_path / "packed.md"
+    packed = runner.invoke(
+        app, ["--plain", "conjure", str(root), "--sha256", "--out", str(artifact)]
+    )
+    assert packed.exit_code == 0
+
+    dst = tmp_path / "risen"
+    raised = runner.invoke(
+        app, ["--plain", "reanimate", str(artifact), "--out", str(dst), "--verify"]
+    )
+    assert raised.exit_code == 0
+    for rel, content in FILES.items():
+        assert (dst / rel).read_text() == content
+
+
+def test_conjure_split_writes_parts(make_repo, tmp_path):
+    root = make_repo({f"f{i}.md": f"words {i}\n" * 100 for i in range(4)})
+    out = tmp_path / "packed.md"
+    result = runner.invoke(
+        app, ["--plain", "conjure", str(root), "--split-tokens", "300", "--out", str(out)]
+    )
+    assert result.exit_code == 0
+    parts = sorted(tmp_path.glob("packed.part*.md"))
+    assert len(parts) > 1
+    assert not out.exists()  # sharded runs write only numbered parts
+
+
+def test_census_cli_formats(make_repo):
+    root = make_repo(FILES)
+    md = runner.invoke(app, ["--plain", "census", str(root)])
+    assert md.exit_code == 0
+    assert "| .md |" in md.stdout
+    csv_out = runner.invoke(app, ["--plain", "census", str(root), "--format", "csv"])
+    assert csv_out.stdout.startswith("extension,language,")
+
+
+def test_unfinished_cli(make_repo):
+    root = make_repo({"main.py": "# TODO: haunt later\n"})
+    result = runner.invoke(app, ["--plain", "unfinished", str(root), "--format", "json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["counts"] == {"TODO": 1}
+    assert data["markers"][0]["author"] == "Test Ghost"
 
 
 def test_pulse_runs():

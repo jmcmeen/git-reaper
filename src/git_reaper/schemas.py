@@ -85,9 +85,18 @@ def schema_for(cls: type) -> dict[str, Any]:
 COMMAND_MODELS: dict[str, type] = {
     "harvest": models.HarvestResult,
     "tree": models.TreeResult,
+    "conjure": models.PackResult,
+    "reanimate": models.ReanimateResult,
+    "census": models.CensusResult,
+    "unfinished": models.UnfinishedResult,
+    "grimoire": models.GrimoireResult,
     "pulse": models.PulseResult,
     "banish": models.BanishResult,
 }
+
+#: Commands with no JSON output of their own (`cast` emits whatever the
+#: recipe's command emits), exempt from the --schema contract.
+SCHEMALESS_COMMANDS = frozenset({"cast"})
 
 
 def artifact_schema(command: str) -> str:

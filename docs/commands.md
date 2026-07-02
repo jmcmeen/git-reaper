@@ -32,6 +32,86 @@ reaper tree . -d 2 --dirs-only      # shallow, directories only
 reaper tree . --format json         # machine-readable
 ```
 
+## conjure
+
+Bundle a repo into a single LLM-ingestible artifact (schema `conjure/v1`):
+provenance block, file tree, then every text file inlined in deterministic
+sorted order. Fences are computed to outlast any backtick run in the
+content; end markers gain a nonce when the content fakes them. Binary,
+non-UTF-8, and over-cap files are skipped with receipts in the artifact.
+
+```sh
+reaper conjure . -o PACKED.md
+reaper conjure . --sha256 -o PACKED.md          # verifiable hashes
+reaper conjure . --split-tokens 100000 -o P.md  # P.part01.md, P.part02.md, ...
+reaper conjure https://github.com/Textualize/rich -x "tests/*" -o RICH.md
+```
+
+## reanimate
+
+The inverse of `conjure`: rebuild the directory tree from a packed
+artifact, closing the loop for LLM editing workflows. Writes to an empty
+directory by default (`--force` to overwrite); refuses absolute paths and
+`..` segments outright. Feed it all the parts of a sharded artifact.
+
+```sh
+reaper reanimate PACKED.md --out risen/
+reaper reanimate P.part*.md --out risen/ --verify
+```
+
+The property that guards the round trip, tested from birth:
+`reanimate(conjure(tree)) == tree`, byte for byte.
+
+## census
+
+File-type census: counts, total and per-extension sizes, line counts,
+language breakdown, token estimate. Size a repo before conjuring it.
+
+```sh
+reaper census .
+reaper census . --format csv > census.csv
+reaper census https://github.com/Textualize/rich --format json
+```
+
+## unfinished
+
+Scan source for TODO / FIXME / HACK / XXX markers: file, line, text,
+author (via git blame when the source is a repo), and `--age` for how
+long each marker has haunted the codebase.
+
+```sh
+reaper unfinished .
+reaper unfinished . --age --format csv
+```
+
+## grimoire
+
+Show effective configuration, where each value came from, and the stored
+recipes. Configuration layers, weakest first: defaults, `[tool.reaper]`
+in pyproject.toml, `.reaperrc` (TOML), environment variables.
+
+```sh
+reaper grimoire
+reaper grimoire --format json
+```
+
+## cast
+
+Run a saved recipe from the grimoire. Extra arguments pass through as
+overrides.
+
+```toml
+# .reaperrc
+[recipes.nightly-pack]
+command = "conjure"
+args = [".", "--sha256", "--out", "PACKED.md"]
+```
+
+```sh
+reaper cast nightly-pack
+reaper cast nightly-pack --split-tokens 50000   # override at cast time
+```
+
 ## pulse
 
 Signs-of-life check: git present and version, optional extras installed,
