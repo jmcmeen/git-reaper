@@ -100,11 +100,6 @@ make run ARGS="tree ."
 make build      # sdist + wheel
 ```
 
-The version comes from git tags (`hatch-vcs`); there is nothing to bump.
-Publishing a GitHub release for a `vX.Y.Z` tag builds and uploads to PyPI
-via trusted publishing, and docs deploy to GitHub Pages on every push to
-`main`.
-
 ## License
 
 MIT. Rest in peace.

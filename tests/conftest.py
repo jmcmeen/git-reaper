@@ -65,10 +65,10 @@ def write_tree(root: Path, files: dict[str, str | bytes]) -> None:
     for rel, content in files.items():
         target = root / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(content, bytes):
-            target.write_bytes(content)
-        else:
-            target.write_text(content, encoding="utf-8")
+        # Write exact bytes: write_text would translate \n -> \r\n on Windows,
+        # committing CRLF blobs and making sizes/goldens platform-dependent.
+        data = content if isinstance(content, bytes) else content.encode("utf-8")
+        target.write_bytes(data)
 
 
 @dataclass
