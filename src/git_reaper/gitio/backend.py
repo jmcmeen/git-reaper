@@ -7,11 +7,71 @@ extra later. Core code depends only on this interface.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
 class GitError(RuntimeError):
     """A git operation failed. Message carries the plain cause and path."""
+
+
+# Raw git records live here, at the gitio/core boundary (like blame's tuples),
+# not in models.py. models.py is for what formatters render and --schema exports;
+# these are internal inputs the history core aggregates over.
+
+
+@dataclass
+class FileChange:
+    """One file touched by a commit. insertions/deletions are None for binaries."""
+
+    path: str
+    insertions: int | None = None
+    deletions: int | None = None
+
+
+@dataclass
+class GitCommit:
+    """One commit with its per-file churn. author_date is strict ISO (with tz)."""
+
+    sha: str
+    author_name: str
+    author_email: str
+    author_time: int  # epoch seconds (UTC)
+    author_date: str  # strict ISO 8601 with the recorded offset
+    subject: str
+    body: str = ""
+    files: list[FileChange] = field(default_factory=list)
+
+
+@dataclass
+class DeadFileRecord:
+    """A file removed by a commit: the path and the fatal commit's metadata."""
+
+    path: str
+    sha: str
+    date: str
+    author: str
+
+
+@dataclass
+class BranchRecord:
+    """One local branch: its tip, recorded activity, and hygiene flags."""
+
+    name: str
+    last_time: int  # epoch seconds of the tip commit
+    last_date: str  # strict ISO
+    author: str
+    merged: bool = False
+    gone_upstream: bool = False
+
+
+@dataclass
+class TagRecord:
+    """One tag pointing at a commit (annotated tags are dereferenced)."""
+
+    name: str
+    sha: str
+    date: str
 
 
 class GitBackend(ABC):
@@ -49,3 +109,37 @@ class GitBackend(ABC):
     def blame(self, repo: Path, rel_path: str) -> list[tuple[str, int]] | None:
         """Per-line (author, author-time epoch), or None when blame fails
         (untracked file, not a repo, no git)."""
+
+    # -- history mining (Phase 3) ------------------------------------------
+
+    @abstractmethod
+    def log(
+        self, repo: Path, ref: str | None = None, max_count: int | None = None
+    ) -> list[GitCommit]:
+        """Full commit log, newest first, each with per-file numstat churn.
+        Rename detection is off for stable parsing; a rename reads as a
+        delete plus an add (which is what churn tools want anyway)."""
+
+    @abstractmethod
+    def file_log(self, repo: Path, rel_path: str, follow: bool = True) -> list[GitCommit]:
+        """Commits that touched one path, newest first, following renames."""
+
+    @abstractmethod
+    def rename_history(self, repo: Path, rel_path: str) -> list[str]:
+        """Prior names this path has worn, newest first (empty if never renamed)."""
+
+    @abstractmethod
+    def deleted_files(self, repo: Path) -> list[DeadFileRecord]:
+        """Every file a commit ever removed, newest death first, one row per path."""
+
+    @abstractmethod
+    def show_file(self, repo: Path, rev: str, rel_path: str) -> bytes | None:
+        """Raw bytes of a path at a revision, or None if absent there."""
+
+    @abstractmethod
+    def branches(self, repo: Path) -> list[BranchRecord]:
+        """Local branches with tip activity and merged/gone-upstream flags."""
+
+    @abstractmethod
+    def tags(self, repo: Path) -> list[TagRecord]:
+        """Tags with the commit they point at (annotated tags dereferenced)."""

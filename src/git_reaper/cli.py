@@ -21,7 +21,10 @@ from rich.table import Table
 
 from git_reaper import __version__, art, cache, config, fsutil, schemas
 from git_reaper.core import census as census_core
+from git_reaper.core import graveyard as graveyard_core
 from git_reaper.core import harvest as harvest_core
+from git_reaper.core import history as history_core
+from git_reaper.core import hygiene as hygiene_core
 from git_reaper.core import pack as pack_core
 from git_reaper.core import pulse as pulse_core
 from git_reaper.core import scan as scan_core
@@ -65,6 +68,11 @@ def _die(message: str, hint: str | None = None) -> typer.Exit:
 
 def _invocation() -> str:
     return "reaper " + " ".join(shlex.quote(a) for a in sys.argv[1:])
+
+
+def _parse_days(text: str) -> int:
+    """A haunting threshold like '90d' or '12h', floored to whole days."""
+    return int(cache.parse_age(text) // 86400)
 
 
 def _emit(text: str, out: Path | None) -> None:
@@ -508,6 +516,296 @@ def cast_cmd(
         if code:
             _say("blood", f"recipe {name!r} failed (exit {code})")
             raise typer.Exit(code=code) from exc
+
+
+# --------------------------------------------------------------------------
+# git necromancy: chronicle, souls, haunt, autopsy, graveyard, resurrect,
+# ghosts, rot, tombstone. History needs a full clone, so remote sources are
+# fetched deep (depth=None), not shallow.
+# --------------------------------------------------------------------------
+
+
+def _resolve_history(source: str, ref: str | None) -> ResolvedSource:
+    return _resolve(source, ref=ref, depth=None)
+
+
+def _history_die(exc: GitError) -> typer.Exit:
+    return _die(str(exc), "`reaper pulse` checks git; history needs a real repo")
+
+
+@app.command("chronicle")
+def chronicle_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    changelog: bool = typer.Option(False, "--changelog", help="Group commits by tag."),
+    max_count: int | None = typer.Option(
+        None, "--max-count", "-n", help="Only the newest N commits."
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Extract commit history to markdown, JSON, or CSV."""
+    if schema:
+        _print_schema("chronicle")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = history_core.chronicle(
+            resolved.repo, changelog=changelog, max_count=max_count, invoked=_invocation()
+        )
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"transcribed {len(result.commits)} commits")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_chronicle(result), out)
+    else:
+        _emit(markdown.render_chronicle(result), out)
+
+
+@app.command("souls")
+def souls_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    heatmap: bool = typer.Option(False, "--heatmap", help="Add the activity heatmap."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Contributor stats, bus factor, and the witching hour."""
+    if schema:
+        _print_schema("souls")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = history_core.souls(resolved.repo, heatmap=heatmap, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"counted {len(result.souls)} souls, bus factor {result.bus_factor}")
+    if result.witching_hour:
+        _say("eldritch", f"the witching hour is {result.witching_hour}")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_souls(result), out)
+    else:
+        _emit(markdown.render_souls(result), out)
+
+
+@app.command("haunt")
+def haunt_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    limit: int | None = typer.Option(None, "--limit", "-n", help="Only the top N hotspots."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Code churn and hotspots: the classic bug-risk proxy."""
+    if schema:
+        _print_schema("haunt")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = history_core.haunt(resolved.repo, limit=limit, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"found {len(result.hotspots)} hotspots")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_haunt(result), out)
+    else:
+        _emit(markdown.render_haunt(result), out)
+
+
+@app.command("autopsy")
+def autopsy_cmd(
+    path: str | None = typer.Argument(None, help="File to examine (relative to the repo)."),
+    source: str = typer.Option(".", "--source", "-s", help="Local path or repo URL."),
+    no_follow: bool = typer.Option(False, "--no-follow", help="Do not follow renames."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Deep single-file examination: birth, authors, churn, blame age."""
+    if schema:
+        _print_schema("autopsy")
+        return
+    if path is None:
+        raise _die("no file given", "pass the path of a file to examine")
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = history_core.autopsy(
+            resolved.repo, path, follow=not no_follow, invoked=_invocation()
+        )
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"examined {result.path}: {result.commits} commits, {len(result.authors)} hands")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_autopsy(result), out)
+
+
+@app.command("graveyard")
+def graveyard_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """List every file that ever lived and died in the repo."""
+    if schema:
+        _print_schema("graveyard")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = graveyard_core.graveyard(resolved.repo, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"counted {len(result.dead)} dead")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_graveyard(result), out)
+    else:
+        _emit(markdown.render_graveyard(result), out)
+
+
+@app.command("resurrect")
+def resurrect_cmd(
+    path: str | None = typer.Argument(None, help="Dead file to raise (its path in the repo)."),
+    source: str = typer.Option(".", "--source", "-s", help="Local path or repo URL."),
+    out: Path = typer.Option(
+        Path("."), "--out", "-o", help="Directory (keeps the path) or exact file target."
+    ),
+    force: bool = typer.Option(False, "--force", help="Overwrite if the target exists."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Restore a dead file from the graveyard into the working tree."""
+    if schema:
+        _print_schema("resurrect")
+        return
+    if path is None:
+        raise _die("no file given", "pass the path of a dead file; `reaper graveyard` lists them")
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = graveyard_core.resurrect(resolved.repo, path, out, force=force)
+    except graveyard_core.ResurrectError as exc:
+        raise _die(str(exc), "`reaper graveyard` lists what can be raised") from exc
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"raised {result.path} from {result.sha[:7]} into {result.out}")
+    _say("ash", "it walks again.")
+
+
+@app.command("ghosts")
+def ghosts_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    than: str | None = typer.Option(
+        None, "--than", help="Flag branches idle longer than this (e.g. 90d)."
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Branch hygiene: activity, merged-but-undeleted, gone remotes."""
+    if schema:
+        _print_schema("ghosts")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    try:
+        than_days = _parse_days(than) if than else None
+    except ValueError as exc:
+        raise _die(str(exc)) from exc
+    resolved = _resolve_history(source, ref)
+    try:
+        result = hygiene_core.ghosts(resolved.repo, than_days=than_days, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"walked {len(result.branches)} branches")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_ghosts(result), out)
+    else:
+        _emit(markdown.render_ghosts(result), out)
+
+
+@app.command("rot")
+def rot_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    limit: int | None = typer.Option(None, "--limit", "-n", help="Only the top N stalest."),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Staleness report: files untouched the longest."""
+    if schema:
+        _print_schema("rot")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = hygiene_core.rot(
+            resolved.repo, limit=limit, excludes=exclude, invoked=_invocation()
+        )
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"weighed {len(result.files)} files for rot")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_rot(result), out)
+    else:
+        _emit(markdown.render_rot(result), out)
+
+
+@app.command("tombstone")
+def tombstone_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """A stats card for demos and READMEs, in ASCII tombstone art."""
+    if schema:
+        _print_schema("tombstone")
+        return
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = history_core.tombstone(resolved.repo, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_tombstone(result), out)
 
 
 # --------------------------------------------------------------------------

@@ -226,6 +226,197 @@ class PulseResult:
 
 
 @dataclass
+class CommitEntry:
+    """One commit in the chronicle."""
+
+    sha: str
+    author: str
+    email: str
+    date: str
+    message: str
+    files_changed: int = 0
+    insertions: int = 0
+    deletions: int = 0
+
+
+@dataclass
+class ChangelogSection:
+    """Commits gathered under one tag (or the unreleased head)."""
+
+    tag: str
+    date: str | None
+    commits: list[CommitEntry] = field(default_factory=list)
+
+
+@dataclass
+class ChronicleResult:
+    """Commit history, newest first, optionally grouped into a changelog."""
+
+    provenance: Provenance
+    commits: list[CommitEntry] = field(default_factory=list)
+    changelog: list[ChangelogSection] = field(default_factory=list)
+
+
+@dataclass
+class Soul:
+    """One contributor's ledger."""
+
+    name: str
+    email: str
+    commits: int = 0
+    insertions: int = 0
+    deletions: int = 0
+    first_seen: str = ""
+    last_seen: str = ""
+
+
+@dataclass
+class SoulsResult:
+    """Contributor stats, a bus-factor estimate, and an optional heatmap."""
+
+    provenance: Provenance
+    souls: list[Soul] = field(default_factory=list)
+    total_commits: int = 0
+    bus_factor: int = 0
+    # 7 rows (Mon..Sun) x 24 cols of commit counts, by the commit's recorded tz.
+    heatmap: list[list[int]] | None = None
+    witching_hour: str | None = None  # e.g. "Fri 02:00"
+
+
+@dataclass
+class Hotspot:
+    """One file ranked by how often it changes and how much."""
+
+    path: str
+    commits: int = 0
+    insertions: int = 0
+    deletions: int = 0
+    churn: int = 0  # insertions + deletions
+
+
+@dataclass
+class HauntResult:
+    """Code churn and hotspots: the classic bug-risk proxy."""
+
+    provenance: Provenance
+    hotspots: list[Hotspot] = field(default_factory=list)
+
+
+@dataclass
+class AuthorShare:
+    """One author's slice of a single file's history."""
+
+    author: str
+    commits: int = 0
+
+
+@dataclass
+class AutopsyResult:
+    """Deep single-file examination."""
+
+    provenance: Provenance
+    path: str
+    exists: bool = True
+    created: str = ""
+    created_sha: str = ""
+    commits: int = 0
+    insertions: int = 0
+    deletions: int = 0
+    authors: list[AuthorShare] = field(default_factory=list)
+    former_names: list[str] = field(default_factory=list)
+    history: list[CommitEntry] = field(default_factory=list)
+    # blame-based line-age summary (None when the file cannot be blamed)
+    blame_lines: int | None = None
+    oldest_line: str | None = None
+    newest_line: str | None = None
+    median_age_days: int | None = None
+
+
+@dataclass
+class DeadFile:
+    """A file that lived and died: path, fatal commit, and its author."""
+
+    path: str
+    last_sha: str
+    died: str
+    author: str
+
+
+@dataclass
+class GraveyardResult:
+    """Every file that ever lived and died in the repo."""
+
+    provenance: Provenance
+    dead: list[DeadFile] = field(default_factory=list)
+
+
+@dataclass
+class ResurrectResult:
+    """A dead file brought back from the graveyard."""
+
+    path: str
+    sha: str  # the commit the content was read from (parent of the deletion)
+    out: str
+    size_bytes: int = 0
+
+
+@dataclass
+class Branch:
+    """One branch's hygiene report."""
+
+    name: str
+    last_commit: str
+    last_sha: str
+    author: str
+    age_days: int = 0
+    merged: bool = False
+    gone_upstream: bool = False
+    stale: bool = False
+
+
+@dataclass
+class GhostsResult:
+    """Branch hygiene: activity, merged-but-undeleted, gone remotes."""
+
+    provenance: Provenance
+    branches: list[Branch] = field(default_factory=list)
+    threshold_days: int | None = None
+
+
+@dataclass
+class StaleFile:
+    """One file ranked by how long it has gone untouched."""
+
+    path: str
+    last_commit: str
+    last_sha: str
+    age_days: int = 0
+
+
+@dataclass
+class RotResult:
+    """Staleness report: files untouched the longest."""
+
+    provenance: Provenance
+    files: list[StaleFile] = field(default_factory=list)
+
+
+@dataclass
+class TombstoneResult:
+    """A stats card for demos and READMEs."""
+
+    provenance: Provenance
+    name: str
+    born: str = ""
+    last: str = ""
+    age_days: int = 0
+    commits: int = 0
+    souls: int = 0
+    last_words: str = ""
+    witching_hour: str | None = None
+
+
+@dataclass
 class CacheEntry:
     """One interred repo in the catacombs."""
 
