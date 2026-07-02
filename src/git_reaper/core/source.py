@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from git_reaper import cache
+from git_reaper import cache, fsutil
 from git_reaper.gitio import GitBackend, GitError, default_backend
 from git_reaper.models import RepoRef
 
@@ -60,7 +59,7 @@ def resolve_source(
             pass
     else:
         if plot.exists():
-            shutil.rmtree(plot)
+            fsutil.force_rmtree(plot)
         backend.clone(source, plot, depth=depth, ref=ref)
     cache.mark_grave(plot, source)
     sha = backend.head_sha(plot)

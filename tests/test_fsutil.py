@@ -29,6 +29,18 @@ def test_parse_size_rejects_units_the_regex_allows():
             fsutil.parse_size(bad)
 
 
+def test_force_rmtree_removes_readonly_files(tmp_path):
+    # Git marks object files read-only; on Windows plain rmtree chokes on
+    # them. force_rmtree must clear the bit and finish the job.
+    crypt = tmp_path / "crypt"
+    (crypt / "objects").mkdir(parents=True)
+    obj = crypt / "objects" / "50052b2e"
+    obj.write_bytes(b"x")
+    obj.chmod(0o444)
+    fsutil.force_rmtree(crypt)
+    assert not crypt.exists()
+
+
 def test_human_size():
     assert fsutil.human_size(340) == "340 B"
     assert fsutil.human_size(1_200_000) == "1.2 MB"

@@ -12,11 +12,11 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import shutil
 import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+from git_reaper import fsutil
 from git_reaper.models import BanishResult, CacheEntry
 
 _SCP_RE = re.compile(r"^(?:\w+@)?(?P<host>[\w.-]+):(?P<path>.+)$")
@@ -107,7 +107,12 @@ def banish(older_than_seconds: float | None = None) -> BanishResult:
         if cutoff is not None and entry.last_used > cutoff:
             result.kept.append(entry)
             continue
-        shutil.rmtree(entry.path, ignore_errors=True)
+        try:
+            fsutil.force_rmtree(entry.path)
+        except OSError:
+            # A grave we cannot dig up (locked file?) is kept, not "removed".
+            result.kept.append(entry)
+            continue
         result.removed.append(entry)
         result.reclaimed_bytes += entry.size_bytes
     return result

@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import stat
+import sys
 from pathlib import Path
+from typing import Any
 
 _CHUNK = 65536
 _SNIFF = 8192
@@ -48,6 +53,23 @@ def human_size(size: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1000
     return f"{int(value)} B"
+
+
+def force_rmtree(path: str | Path) -> None:
+    """rmtree that also removes read-only files.
+
+    Git marks object files read-only; on Windows a plain rmtree raises
+    PermissionError on them. Clear the bit and retry.
+    """
+
+    def _grant_and_retry(func: Any, target: Any, _exc: Any) -> None:
+        os.chmod(target, stat.S_IWRITE)
+        func(target)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_grant_and_retry)
+    else:
+        shutil.rmtree(path, onerror=_grant_and_retry)
 
 
 def is_binary(path: Path) -> bool:
