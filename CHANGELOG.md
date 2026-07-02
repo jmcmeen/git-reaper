@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The Summoning. An interactive TUI over the same core the CLI drives.
+
+### Added
+
+- `reaper summon [SOURCE]` - launch a Textual TUI (behind the `git-reaper[tui]`
+  extra): a splash-screen skull, a source input, a ritual picker, a live
+  scythe-spinner while the core runs on a worker thread, a scrollable preview
+  of the rendered artifact, and a save dialog. Grimoire recipes are listed and
+  prefill the source and ritual on selection. Without the extra, `summon`
+  exits with clear guidance to install it.
+- `git_reaper.tui_ops`: a textual-free registry mapping each interactive
+  ritual to its core function and formatter, so the wiring is testable without
+  the TUI.
+
 ## [0.3.0] - 2026-07-02
 
 Git Necromancy. Mining commit history: who, what, when, and what has died.

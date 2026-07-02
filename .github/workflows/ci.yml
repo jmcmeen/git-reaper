@@ -51,6 +51,20 @@ jobs:
       - run: uv sync --extra git
       - run: uv run --extra git pytest
 
+  # The base matrix runs without extras, so the Textual TUI (Pilot) tests skip
+  # there. This job installs the [tui] extra so the TUI is exercised.
+  test-tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra tui
+      - run: uv run --extra tui pytest
+
   docs:
     runs-on: ubuntu-latest
     steps:

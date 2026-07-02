@@ -104,8 +104,8 @@ COMMAND_MODELS: dict[str, type] = {
 }
 
 #: Commands with no JSON output of their own (`cast` emits whatever the
-#: recipe's command emits), exempt from the --schema contract.
-SCHEMALESS_COMMANDS = frozenset({"cast"})
+#: recipe's command emits; `summon` launches the TUI), exempt from --schema.
+SCHEMALESS_COMMANDS = frozenset({"cast", "summon"})
 
 
 def artifact_schema(command: str) -> str:

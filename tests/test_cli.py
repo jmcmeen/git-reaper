@@ -253,6 +253,25 @@ def test_history_on_plain_folder_exits_1(make_dir):
     assert result.exit_code == 1
 
 
+def test_summon_without_the_extra_errors_clearly(monkeypatch):
+    # Simulate textual being absent regardless of the local env: `reaper summon`
+    # must exit 1 with the missing-extra guidance, never a raw ImportError.
+    import builtins
+    import sys
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "textual" or name.startswith("textual."):
+            raise ImportError("no textual")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.delitem(sys.modules, "git_reaper.tui", raising=False)
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    result = runner.invoke(app, ["--plain", "summon", "."])
+    assert result.exit_code == 1
+
+
 def test_history_writes_pure_artifact_to_out(necropolis, tmp_path):
     out = tmp_path / "log.md"
     result = runner.invoke(app, ["--plain", "chronicle", str(necropolis), "--out", str(out)])
