@@ -108,6 +108,30 @@ def test_tombstone_vitals(necropolis):
     assert result.age_days > 0
 
 
+def test_chronicle_handles_binary_files(make_history):
+    # git renders binary churn as "-\t-\tpath"; the parser must not choke and
+    # must report zero (not None) churn for it. Kept off the shared fixture so
+    # its exact-count assertions stay intact.
+    root = make_history(
+        [
+            {
+                "message": "add an image",
+                "when": "2020-01-06T02:00:00+00:00",
+                "write": {"logo.png": b"\x89PNG\r\n\x1a\n\x00\x01\x02\x03"},
+            }
+        ]
+    )
+    result = history.chronicle(ref(root))
+    assert len(result.commits) == 1
+    commit = result.commits[0]
+    assert commit.files_changed == 1
+    assert commit.insertions == 0 and commit.deletions == 0
+    # and haunt aggregates the binary without error
+    hot = history.haunt(ref(root)).hotspots
+    assert hot[0].path == "logo.png"
+    assert hot[0].churn == 0
+
+
 def test_history_on_a_plain_folder_is_a_clear_error(make_dir):
     import pytest
 
