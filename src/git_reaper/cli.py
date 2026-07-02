@@ -14,7 +14,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import click
 import typer
 from rich.console import Console
 from rich.markup import escape
@@ -501,12 +500,14 @@ def cast_cmd(
     _say("necro", f"casting {name}: reaper {' '.join(argv)}")
     command = typer.main.get_command(app)
     try:
-        command.main(args=argv, prog_name="reaper", standalone_mode=False)
-    except click.exceptions.Exit as exc:
-        if exc.exit_code:
-            raise typer.Exit(code=exc.exit_code) from exc
-    except click.ClickException as exc:
-        raise _die(f"recipe {name!r}: {exc.format_message()}") from exc
+        # standalone mode prints usage errors itself and always leaves via
+        # SystemExit (0 on success); translate the code, never swallow it.
+        command.main(args=argv, prog_name="reaper")
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 1
+        if code:
+            _say("blood", f"recipe {name!r} failed (exit {code})")
+            raise typer.Exit(code=code) from exc
 
 
 # --------------------------------------------------------------------------
