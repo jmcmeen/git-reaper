@@ -7,6 +7,7 @@ reused across runs, and cleared by ``banish``.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -37,13 +38,21 @@ def grave_path(url: str) -> Path:
     """Map a remote URL to its plot in the catacombs."""
     parsed = urlparse(url)
     if parsed.scheme == "file":
-        # file:// URLs have no meaningful host; file them under "localhost".
         # Tolerate Windows spellings (file://C:\repos\x): backslashes never
         # delimit for urlparse, so the drive letter lands in netloc.
-        host, path = "localhost", parsed.path.replace("\\", "/")
+        path = parsed.path.replace("\\", "/")
         if re.match(r"^[A-Za-z]:", parsed.netloc):
             path = parsed.netloc.replace("\\", "/") + path
-    elif parsed.scheme:
+        path = path.strip("/")
+        if not path:
+            raise ValueError(f"URL has no repository path: {url!r}")
+        # Local paths can be arbitrarily deep; mirroring them under the
+        # catacombs would breach Windows' 260-char path limit. Bury them
+        # flat: basename plus a short digest of the full path.
+        digest = hashlib.sha256(path.encode("utf-8")).hexdigest()[:12]
+        name = _sanitize(path.rsplit("/", 1)[-1])
+        return catacombs_root() / "localhost" / f"{name}-{digest}"
+    if parsed.scheme:
         host, path = parsed.netloc or "localhost", parsed.path
     else:
         scp = _SCP_RE.match(url)

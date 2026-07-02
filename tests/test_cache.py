@@ -20,14 +20,17 @@ def test_grave_path_layouts(isolated_catacombs: Path):
 
 
 def test_grave_path_file_urls(isolated_catacombs: Path):
+    # Local repos are buried flat (basename + digest) so deep source paths
+    # cannot breach Windows' 260-char path limit.
     posix = cache.grave_path("file:///tmp/crypt/corpse")
-    assert posix == isolated_catacombs / "localhost" / "tmp" / "crypt" / "corpse"
-    # Windows as_uri() form: drive letter rides in the path.
+    assert posix.parent == isolated_catacombs / "localhost"
+    assert posix.name.startswith("corpse-")
+    # Windows as_uri() form and the hand-typed backslash form map to the
+    # same grave; distinct paths get distinct graves.
     proper = cache.grave_path("file:///C:/repos/corpse")
-    assert proper == isolated_catacombs / "localhost" / "C_" / "repos" / "corpse"
-    # Hand-typed Windows form: backslashes push the drive into the netloc.
     typed = cache.grave_path("file://C:\\repos\\corpse")
     assert typed == proper
+    assert proper != posix
 
 
 def test_grave_path_rejects_nonsense():
