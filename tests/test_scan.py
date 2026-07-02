@@ -34,9 +34,7 @@ def test_blame_fills_authors_in_a_repo(make_repo):
 
 
 def test_unfinished_renders(make_dir):
-    result = unfinished(
-        resolve_source(str(make_dir(FILES))).repo, generated="2026-07-01T00:00:00Z"
-    )
+    result = unfinished(resolve_source(str(make_dir(FILES))).repo, generated="2026-07-01T00:00:00Z")
     md = markdown.render_unfinished(result)
     assert "schema:    unfinished/v1" in md
     assert "**TODO**: finish this ritual" in md

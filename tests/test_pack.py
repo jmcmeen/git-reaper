@@ -147,9 +147,7 @@ _CONTENT = st.text(
 
 
 def _no_dir_file_conflicts(tree: dict[str, str]) -> bool:
-    return not any(
-        q != p and q.startswith(p + "/") for p in tree for q in tree
-    )
+    return not any(q != p and q.startswith(p + "/") for p in tree for q in tree)
 
 
 @settings(
