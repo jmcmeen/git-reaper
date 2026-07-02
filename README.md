@@ -32,6 +32,7 @@ fallback if the REAPER DAW already owns the short one).
 | `cast` | Run a saved recipe from the grimoire instead of retyping nine flags. |
 | `pulse` | Signs-of-life check: git present, optional extras, cache health. |
 | `banish` | Clear the catacombs (the clone cache). `--older-than 7d` for partial exorcisms. |
+| `summon` | Launch the interactive Textual TUI (needs the `[tui]` extra): pick a source and a ritual, watch it reap, preview the artifact, and save it. |
 
 ### Git necromancy (history mining)
 
@@ -67,6 +68,8 @@ reaper autopsy src/git_reaper/cli.py
 reaper graveyard . && reaper resurrect old/module.py --out risen/
 reaper ghosts . --than 90d
 reaper tombstone .
+
+reaper summon .            # interactive TUI (pip install "git-reaper[tui]")
 ```
 
 Recipes live in `.reaperrc` (or `[tool.reaper]` in pyproject.toml):

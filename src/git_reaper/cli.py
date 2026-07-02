@@ -874,6 +874,26 @@ def banish_cmd(
 
 
 # --------------------------------------------------------------------------
+# summon (the TUI)
+# --------------------------------------------------------------------------
+
+
+@app.command("summon")
+def summon_cmd(
+    source: str = typer.Argument(".", help="Prefill the source (path or repo URL)."),
+) -> None:
+    """Launch the Textual TUI."""
+    try:
+        from git_reaper.tui import run_tui
+    except ImportError as exc:
+        raise _die(
+            "the TUI needs the extra; install `git-reaper[tui]`",
+            "`reaper pulse` shows which extras are present",
+        ) from exc
+    run_tui(source)
+
+
+# --------------------------------------------------------------------------
 # easter egg
 # --------------------------------------------------------------------------
 

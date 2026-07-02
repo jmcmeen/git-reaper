@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-02
+
+The Summoning. An interactive TUI over the same core the CLI drives.
+
+### Added
+
+- `reaper summon [SOURCE]` - launch a Textual TUI (behind the `git-reaper[tui]`
+  extra): a source input, a ritual picker, a live scythe-spinner while the core
+  runs on a worker thread, a scrollable preview of the rendered artifact, and a
+  save dialog. Grimoire recipes are listed and prefill the source and ritual on
+  selection. Without the extra, `summon` exits with clear guidance to install
+  it.
+- `git_reaper.tui_ops`: a textual-free registry mapping each interactive
+  ritual to its core function and formatter, so the wiring is testable without
+  the TUI.
+
 ## [0.3.0] - 2026-07-02
 
 Git Necromancy. Mining commit history: who, what, when, and what has died.
@@ -171,7 +187,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/jmcmeen/git-reaper/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jmcmeen/git-reaper/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jmcmeen/git-reaper/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jmcmeen/git-reaper/releases/tag/v0.1.0
