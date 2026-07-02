@@ -1,0 +1,51 @@
+site_name: git-reaper
+site_description: A spooky utility for data mining git repositories.
+site_url: https://jmcmeen.github.io/git-reaper/
+repo_url: https://github.com/jmcmeen/git-reaper
+repo_name: jmcmeen/git-reaper
+
+theme:
+  name: material
+  palette:
+    # the crypt is dark by default
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: deep orange
+      toggle:
+        icon: material/weather-sunny
+        name: flee the crypt
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: return to the crypt
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: false
+            members_order: source
+
+nav:
+  - Home: index.md
+  - Commands: commands.md
+  - Library: library.md
+  - API reference: api.md
+  - Development: development.md
