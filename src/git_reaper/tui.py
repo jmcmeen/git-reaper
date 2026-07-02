@@ -265,9 +265,10 @@ class ReaperApp(App[None]):
             with Vertical(id="main"):
                 yield Label(self.current_op.label, id="ritual-name")
                 yield VerticalScroll(id="options")
-                yield ScytheSpinner("", id="spinner")
                 yield TextArea("", id="preview", read_only=True)
                 yield Markdown("", id="rendered")
+                # progress and status both report below the output, never above it
+                yield ScytheSpinner("", id="spinner")
                 with Horizontal(id="statusbar"):
                     yield Label(f"git-reaper {__version__} - pick a ritual and reap", id="status")
                     yield Static("", id="badge")

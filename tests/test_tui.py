@@ -84,6 +84,9 @@ def test_ritual_name_and_status_are_separate_areas(necropolis):
             await pilot.pause()
             name = str(app.query_one("#ritual-name").render())
             assert "souls" in name  # the ritual name sits up top
+            order = [c.id for c in app.query_one("#main").children]
+            assert order.index("preview") < order.index("spinner")
+            assert order.index("preview") < order.index("statusbar")
             app.action_reap()
             await app.workers.wait_for_complete()
             await pilot.pause()
