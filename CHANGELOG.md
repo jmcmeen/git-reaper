@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-02
+
+The Séance. A full overhaul of the `reaper summon` TUI, bringing the
+interactive face up to parity with the Phase 5/6 CLI.
+
+### Added
+
+- **Dracula by default.** The TUI ships a bespoke `reaper-dracula` theme that
+  maps the reaper's spooky tokens onto Dracula's palette (eldritch purple,
+  necro green, blood red, ember orange). **Ctrl+P** opens Textual's command
+  palette to switch to any built-in theme (dracula, nord, gruvbox, ...) live.
+- **Fuller ritual coverage.** The TUI now exposes the Phase 5/6 analysis
+  rituals it was missing: `exhume`, `omens`, `doppelgangers`, `bloat`, `bones`,
+  and `plague` -- 18 rituals in all, grouped in the sidebar (reaping, packing,
+  necromancy, forensics, dark arts).
+- **Per-ritual options panel.** Each ritual's flags are editable widgets:
+  `format` (md/json/csv/html), `omens --lens`, `souls --heatmap`,
+  `chronicle --changelog`, limits, `exhume`'s entropy toggle, and
+  `plague --offline` (on by default -- no surprise network). Options are
+  declared in the textual-free `tui_ops`, so the base suite covers them.
+- **Cursed badge.** `exhume`, `omens`, and `plague` results show a red badge
+  with the finding count; previews stay masked.
+- **Quality of life:** copy the artifact to the clipboard (`c`), a directory
+  browser for the source (`b`), a source inspector that grays git-only rituals
+  on a plain folder, staged reaping progress, a raw/rendered markdown toggle
+  (`m`), format-aware save filenames, a help screen (`?`), and recipes that
+  prefill their known flags into the options panel.
+
+### Changed
+
+- `tui_ops.Operation` gains `group` and `options`, and its `run` now takes an
+  options dict and returns a `ReapResult` (text, summary, cursed). The TUI
+  minimum is bumped to `textual>=0.86` for the theme API.
+
 ## [1.0.0] - 2026-07-02
 
 Dark Arts and the Necropolis. The security and multi-repo phases land

@@ -32,7 +32,7 @@ fallback if the REAPER DAW already owns the short one).
 | `cast` | Run a saved recipe from the grimoire instead of retyping nine flags. |
 | `pulse` | Signs-of-life check: git present, optional extras, cache health. |
 | `banish` | Clear the catacombs (the clone cache). `--older-than 7d` for partial exorcisms. |
-| `summon` | Launch the interactive Textual TUI (needs the `[tui]` extra): pick a source and a ritual, watch it reap, preview the artifact, and save it. |
+| `summon` | Launch the interactive Textual TUI (needs the `[tui]` extra): a Dracula-themed cockpit to pick a source and a ritual, tune its options (format, lens, limits, toggles), watch it reap, preview the artifact, and save it. Covers the analysis rituals (incl. `exhume`/`omens`/`bones`/`bloat`/`doppelgangers`/`plague`) with a cursed badge for findings; Ctrl+P switches themes. |
 
 ### Git necromancy (history mining)
 
@@ -134,7 +134,7 @@ The base install is lean. Heavier machinery lives behind extras:
 
 ```sh
 pip install "git-reaper[bones]"    # tree-sitter: bones for JS/TS/Go/Rust/Java/...
-pip install "git-reaper[tui]"      # textual: the `reaper summon` TUI
+pip install "git-reaper[tui]"      # textual: the Dracula `reaper summon` TUI
 pip install "git-reaper[tokens]"   # tiktoken: exact token counts
 pip install "git-reaper[git]"      # GitPython backend (GIT_REAPER_BACKEND=gitpython)
 pip install "git-reaper[all]"      # everything

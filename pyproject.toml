@@ -35,7 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 git = ["GitPython>=3.1"]
 tokens = ["tiktoken>=0.7"]
-tui = ["textual>=0.80"]
+tui = ["textual>=0.86"]
 bones = ["tree-sitter>=0.23", "tree-sitter-language-pack>=0.13"]
 all = ["git-reaper[git,tokens,tui,bones]"]
 

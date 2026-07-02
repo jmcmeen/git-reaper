@@ -253,6 +253,37 @@ source = "/local/path/to/repo"
 name = "beta"
 ```
 
+## summon (the TUI)
+
+Launch the interactive Textual TUI (needs the `[tui]` extra). A Dracula-themed
+cockpit over the same core the CLI drives: pick a source, choose a ritual, tune
+its options, reap, preview, and save.
+
+```sh
+pip install "git-reaper[tui]"
+reaper summon .            # prefill the source
+```
+
+- **Rituals**, grouped in the sidebar: *reaping* (limbs, harvest), *packing*
+  (conjure, census, unfinished, bones), *necromancy* (chronicle, souls, haunt,
+  graveyard, rot, ghosts, tombstone), *forensics* (doppelgangers, bloat), and
+  *dark arts* (exhume, omens, plague). Git-only rituals are marked `*` and gray
+  out when the source is a plain folder.
+- **Options panel.** Each ritual exposes its flags as widgets: `format`
+  (md/json/csv/html), `omens --lens`, `souls --heatmap`, limits, `exhume`'s
+  entropy toggle, `plague --offline` (on by default -- no surprise network).
+- **Cursed badge.** `exhume`, `omens`, and `plague` show a red badge with the
+  finding count when the scan turns up what you feared. Previews stay masked.
+- **Themes.** Defaults to `reaper-dracula`; **Ctrl+P** opens the command palette
+  to switch to any built-in theme (dracula, nord, gruvbox, ...) live.
+- **Keys.** `r` reap - `s` save (extension follows the format) - `c` copy -
+  `b` browse for a source - `/` focus source - `m` raw/rendered markdown -
+  `?` help - `q` quit.
+
+Commands that need positional arguments (`scry`, `autopsy`, `resurrect`,
+`reanimate`, `veil`) or that are meta (`grimoire`, `cast`, `banish`, `pulse`,
+`necropolis`) stay CLI-only.
+
 ## pulse
 
 Signs-of-life check: git present and version, optional extras installed,

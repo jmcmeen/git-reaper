@@ -13,18 +13,32 @@ import pytest
 
 pytest.importorskip("textual")
 
-from textual.widgets import Input, OptionList, TextArea
+from textual.widgets import Input, OptionList, Select, Static, TextArea
 
-from git_reaper.tui import ReaperApp, SaveScreen
-from git_reaper.tui_ops import OPERATIONS, OPERATIONS_BY_KEY
+from git_reaper.tui import BrowseScreen, HelpScreen, ReaperApp, SaveScreen
+from git_reaper.tui_ops import OPERATIONS
+
+AWS_KEY = "AKIAABCDEFGHIJKLMNOP"
 
 
-def test_boots_with_the_ritual_list(necropolis):
+def _op_ids(app: ReaperApp) -> set[str]:
+    ops = app.query_one("#operations", OptionList)
+    ids = set()
+    for i in range(ops.option_count):
+        oid = ops.get_option_at_index(i).id
+        if oid is not None:  # skip group headers
+            ids.add(oid)
+    return ids
+
+
+def test_boots_dracula_with_every_ritual(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
-        async with app.run_test(size=(100, 40)) as pilot:
+        async with app.run_test(size=(120, 45)) as pilot:
             await pilot.pause()
-            assert app.query_one("#operations", OptionList).option_count == len(OPERATIONS)
+            assert app.theme == "reaper-dracula"
+            assert "reaper-dracula" in app.available_themes
+            assert _op_ids(app) == {op.key for op in OPERATIONS}
 
     asyncio.run(scenario())
 
@@ -32,7 +46,7 @@ def test_boots_with_the_ritual_list(necropolis):
 def test_reap_populates_preview(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
-        async with app.run_test(size=(100, 40)) as pilot:
+        async with app.run_test(size=(120, 45)) as pilot:
             await pilot.pause()
             app.action_reap()  # default ritual is 'limbs'
             await app.workers.wait_for_complete()
@@ -43,31 +57,63 @@ def test_reap_populates_preview(necropolis):
     asyncio.run(scenario())
 
 
-def test_selecting_a_history_ritual_then_reaping(necropolis):
+def test_options_panel_rebuilds_on_ritual_change(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
-        async with app.run_test(size=(100, 40)) as pilot:
+        async with app.run_test(size=(120, 45)) as pilot:
             await pilot.pause()
-            ops = app.query_one("#operations", OptionList)
-            ops.focus()
-            ops.highlighted = OPERATIONS.index(OPERATIONS_BY_KEY["chronicle"])
-            await pilot.press("enter")  # select the highlighted ritual
+            app.set_operation("omens")
             await pilot.pause()
-            assert app.current_op.key == "chronicle"
-            app.action_reap()
-            await app.workers.wait_for_complete()
+            assert app.current_op.key == "omens"
+            assert app.query_one("#opt-lens", Select).value == "all"
+            app.set_operation("harvest")  # no options
             await pilot.pause()
-            assert "schema:    chronicle/v1" in app.query_one("#preview", TextArea).text
+            assert len(app.query("#opt-lens")) == 0
 
     asyncio.run(scenario())
 
 
-def test_save_writes_the_previewed_artifact(necropolis, tmp_path):
-    target = tmp_path / "out" / "tree.md"
+def test_format_option_changes_the_preview(necropolis):
+    async def scenario() -> None:
+        app = ReaperApp(source=str(necropolis))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            app.set_operation("census")
+            await pilot.pause()
+            app.query_one("#opt-format", Select).value = "json"
+            app.action_reap()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.query_one("#preview", TextArea).text.lstrip().startswith("{")
+            assert app._last_format == "json"
+
+    asyncio.run(scenario())
+
+
+def test_cursed_badge_shows_for_exhume(make_repo):
+    root = make_repo({"leak.env": f"KEY={AWS_KEY}\n"})
+
+    async def scenario() -> None:
+        app = ReaperApp(source=str(root))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            app.set_operation("exhume")
+            await pilot.pause()
+            app.action_reap()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert app.query_one("#badge", Static).display is True
+            assert AWS_KEY not in app.query_one("#preview", TextArea).text  # masked
+
+    asyncio.run(scenario())
+
+
+def test_save_uses_the_current_ritual_and_format(necropolis, tmp_path):
+    target = tmp_path / "out" / "limbs.md"
 
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
-        async with app.run_test(size=(100, 40)) as pilot:
+        async with app.run_test(size=(120, 45)) as pilot:
             await pilot.pause()
             app.action_reap()
             await app.workers.wait_for_complete()
@@ -77,11 +123,42 @@ def test_save_writes_the_previewed_artifact(necropolis, tmp_path):
             app.action_save()  # opens the save modal
             await pilot.pause()
             assert isinstance(app.screen, SaveScreen)
+            assert app.screen.query_one("#path", Input).value == "limbs.md"
             app.screen.query_one("#path", Input).value = str(target)
             await pilot.click("#ok")
             await pilot.pause()
-
             assert target.read_text() == expected
+
+    asyncio.run(scenario())
+
+
+def test_help_and_browse_modals_open(necropolis):
+    async def scenario() -> None:
+        app = ReaperApp(source=str(necropolis))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            app.action_help()
+            await pilot.pause()
+            assert isinstance(app.screen, HelpScreen)
+            await pilot.press("escape")
+            await pilot.pause()
+            app.action_browse()
+            await pilot.pause()
+            assert isinstance(app.screen, BrowseScreen)
+
+    asyncio.run(scenario())
+
+
+def test_source_inspector_flags_a_plain_folder(make_dir):
+    folder = make_dir({"a.txt": "hi\n"})
+
+    async def scenario() -> None:
+        app = ReaperApp(source=str(folder))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert "plain folder" in str(app.query_one("#source-hint").render())
 
     asyncio.run(scenario())
 
@@ -89,7 +166,7 @@ def test_save_writes_the_previewed_artifact(necropolis, tmp_path):
 def test_bad_source_reports_failure_without_crashing():
     async def scenario() -> None:
         app = ReaperApp(source="/no/such/crypt")
-        async with app.run_test(size=(100, 40)) as pilot:
+        async with app.run_test(size=(120, 45)) as pilot:
             await pilot.pause()
             app.action_reap()
             await app.workers.wait_for_complete()
@@ -101,17 +178,18 @@ def test_bad_source_reports_failure_without_crashing():
     asyncio.run(scenario())
 
 
-def test_recipe_prefills_source_and_ritual(necropolis, tmp_path, monkeypatch):
+def test_recipe_prefills_source_and_ritual(tmp_path, monkeypatch):
     # A .reaperrc with one recipe; selecting it prefills the source + ritual.
     rc = tmp_path / ".reaperrc"
     rc.write_text(
-        "[recipes.nightly]\ncommand = 'census'\nargs = ['/some/where']\n", encoding="utf-8"
+        "[recipes.nightly]\ncommand = 'census'\nargs = ['/some/where', '--format', 'json']\n",
+        encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
 
     async def scenario() -> None:
         app = ReaperApp(source=".")
-        async with app.run_test(size=(100, 40)) as pilot:
+        async with app.run_test(size=(120, 45)) as pilot:
             await pilot.pause()
             recipes = app.query_one("#recipes", OptionList)
             assert recipes.option_count == 1
@@ -121,5 +199,7 @@ def test_recipe_prefills_source_and_ritual(necropolis, tmp_path, monkeypatch):
             await pilot.pause()
             assert app.query_one("#source", Input).value == "/some/where"
             assert app.current_op.key == "census"
+            # the recipe's --format json was mapped onto the options panel
+            assert app.query_one("#opt-format", Select).value == "json"
 
     asyncio.run(scenario())
