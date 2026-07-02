@@ -54,8 +54,8 @@ def _conjure(repo: RepoRef) -> str:
     return "".join(text for _number, text in pack_core.iter_parts(result))
 
 
-def _tree(repo: RepoRef) -> str:
-    return markdown.render_tree(tree_core.tree(repo, invoked=_invoked("tree")))
+def _limbs(repo: RepoRef) -> str:
+    return markdown.render_tree(tree_core.tree(repo, invoked=_invoked("limbs")))
 
 
 def _census(repo: RepoRef) -> str:
@@ -95,7 +95,7 @@ def _ghosts(repo: RepoRef) -> str:
 
 
 OPERATIONS: list[Operation] = [
-    Operation("tree", "tree - hierarchical file listing", False, _tree),
+    Operation("limbs", "limbs - hierarchical file listing", False, _limbs),
     Operation("harvest", "harvest - gather *.md into one artifact", False, _harvest),
     Operation("conjure", "conjure - bundle the repo for an LLM", False, _conjure),
     Operation("census", "census - file-type census", False, _census),

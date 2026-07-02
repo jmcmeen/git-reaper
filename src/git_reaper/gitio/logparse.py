@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 
 from git_reaper.gitio.backend import (
+    BlobRecord,
     BranchRecord,
     DeadFileRecord,
     FileChange,
@@ -84,6 +85,25 @@ def branch_ref_args() -> list[str]:
 
 def tag_ref_args() -> list[str]:
     return [*_QUOTEPATH, "for-each-ref", f"--format={_TAG_FORMAT}", "refs/tags"]
+
+
+def object_list_args() -> list[str]:
+    """Every object reachable from any ref, blobs and trees carrying a path."""
+    return [*_QUOTEPATH, "rev-list", "--all", "--objects"]
+
+
+def batch_check_args() -> list[str]:
+    """Type and uncompressed size of every object in the local store."""
+    fmt = "--batch-check=%(objectname) %(objecttype) %(objectsize)"
+    return ["cat-file", "--batch-all-objects", fmt]
+
+
+def blob_commit_args(sha: str, path: str) -> list[str]:
+    fmt = f"--pretty=format:%H{US}%aI{US}%an"
+    args = [*_QUOTEPATH, "log", "--all", f"--find-object={sha}", fmt]
+    if path:
+        args += ["--", path]
+    return args
 
 
 # -- parsers ---------------------------------------------------------------
@@ -185,6 +205,40 @@ def parse_branches(out: str, merged: set[str]) -> list[BranchRecord]:
 
 def parse_merged(out: str) -> set[str]:
     return {line.lstrip("* ").strip() for line in out.split("\n") if line.strip()}
+
+
+def parse_blobs(object_list_out: str, batch_check_out: str) -> list[BlobRecord]:
+    """Join rev-list's (sha, path) pairs with cat-file's (sha, type, size).
+
+    rev-list names every reachable object (trees included); cat-file supplies
+    the type filter and the size. Only reachable blobs survive the join.
+    """
+    paths: dict[str, str] = {}
+    for line in object_list_out.split("\n"):
+        if not line:
+            continue
+        sha, _, path = line.partition(" ")
+        if sha not in paths:
+            paths[sha] = path
+    blobs: list[BlobRecord] = []
+    for line in batch_check_out.split("\n"):
+        parts = line.split(" ")
+        if len(parts) != 3 or parts[1] != "blob":
+            continue
+        sha, _, size = parts
+        if sha in paths:
+            blobs.append(BlobRecord(sha=sha, path=paths[sha], size_bytes=int(size)))
+    blobs.sort(key=lambda b: b.sha)
+    return blobs
+
+
+def parse_blob_commit(out: str) -> tuple[str, str, str] | None:
+    """The oldest (sha, iso date, author) line from a --find-object log."""
+    lines = [line for line in out.split("\n") if US in line]
+    if not lines:
+        return None
+    sha, date, author = lines[-1].split(US)
+    return sha, date, author
 
 
 def parse_tags(out: str) -> list[TagRecord]:

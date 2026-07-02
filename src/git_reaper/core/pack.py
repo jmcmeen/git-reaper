@@ -25,6 +25,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from git_reaper import fsutil
+from git_reaper.core import rules as rules_engine
 from git_reaper.core.harvest import CapExceeded
 from git_reaper.core.provenance import make_provenance
 from git_reaper.formatters.markdown import render_provenance
@@ -48,13 +49,20 @@ def _fence_for(text: str) -> int:
     return max(3, longest + 1)
 
 
-def _read_text(path: Path) -> str | None:
-    """Strict UTF-8, no newline translation. None if it will not decode."""
+def _read_text(path: Path, veil_rules: list[rules_engine.Rule] | None = None) -> str | None:
+    """Strict UTF-8, no newline translation. None if it will not decode.
+
+    When veiling, the same redaction runs in the analyze and render passes,
+    so fences, hashes, and line counts always describe the veiled content.
+    """
     try:
         with path.open("r", encoding="utf-8", newline="") as fh:
-            return fh.read()
+            text = fh.read()
     except UnicodeDecodeError:
         return None
+    if veil_rules is not None:
+        text = rules_engine.veil_text(text, rules=veil_rules).text
+    return text
 
 
 def conjure(
@@ -64,6 +72,7 @@ def conjure(
     max_total_size: int | None = None,
     with_sha256: bool = False,
     split_tokens: int | None = None,
+    veil_rules: list[rules_engine.Rule] | None = None,
     invoked: str = "reaper conjure",
     generated: str | None = None,
 ) -> PackResult:
@@ -100,6 +109,10 @@ def conjure(
                 FileEntry(path=rel, size_bytes=size, skipped=True, skip_reason="not valid UTF-8")
             )
             continue
+        if veil_rules is not None:
+            veiled = rules_engine.veil_text(content, rules=veil_rules)
+            content = veiled.text
+            result.veiled += veiled.total
         if max_total_size is not None and result.total_bytes + size > max_total_size:
             raise CapExceeded(
                 f"total size cap ({fsutil.human_size(max_total_size)}) hit at {rel}; "
@@ -161,8 +174,10 @@ def _render_tree(paths: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _render_file(entry: PackedFile, root: Path) -> str:
-    content = _read_text(root / entry.path)
+def _render_file(
+    entry: PackedFile, root: Path, veil_rules: list[rules_engine.Rule] | None = None
+) -> str:
+    content = _read_text(root / entry.path, veil_rules)
     if content is None:  # pragma: no cover - vanished/changed between passes
         raise CapExceeded(f"{entry.path} changed while packing; rerun the ritual")
     meta: list[str] = []
@@ -184,14 +199,19 @@ def _render_file(entry: PackedFile, root: Path) -> str:
     return "".join(pieces)
 
 
-def iter_parts(result: PackResult) -> Iterator[tuple[int, str]]:
+def iter_parts(
+    result: PackResult, veil_rules: list[rules_engine.Rule] | None = None
+) -> Iterator[tuple[int, str]]:
     """Yield (part_number, text). Part 1 carries the tree and the receipts;
-    every part repeats the provenance block (with part: i/n when sharded)."""
+    every part repeats the provenance block (with part: i/n when sharded).
+    Pass the same veil_rules given to conjure(), or the receipts will lie."""
     root = Path(result.root)
     parts = _assign_parts(result)
     total = len(parts)
     for number, entries in enumerate(parts, start=1):
         extra = [f"part:      {number}/{total}"] if total > 1 else []
+        if result.veiled:
+            extra.append(f"veiled:    {result.veiled} replacements")
         pieces = [render_provenance(result.provenance, "conjure", extra=extra)]
         if number == 1:
             tree_text = _render_tree([f.path for f in result.files])
@@ -200,5 +220,5 @@ def iter_parts(result: PackResult) -> Iterator[tuple[int, str]]:
             for skipped in result.skipped:
                 pieces.append(f"<!-- skipped {skipped.path}: {skipped.skip_reason} -->\n")
         for entry in entries:
-            pieces.append(_render_file(entry, root))
+            pieces.append(_render_file(entry, root, veil_rules))
         yield number, "".join(pieces)

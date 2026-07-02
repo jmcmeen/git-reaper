@@ -15,7 +15,7 @@ runner = CliRunner()
 
 REAPERRC = """
 [recipes.mapit]
-command = "tree"
+command = "limbs"
 args = ["."]
 description = "map the crypt"
 
@@ -42,7 +42,7 @@ def test_load_grimoire_layers_and_precedence(tmp_path: Path):
     recipes = {r.name: r for r in result.recipes}
     assert set(recipes) == {"mapit", "snapshot", "only-here"}
     # .reaperrc outranks pyproject for the same name
-    assert recipes["mapit"].command == "tree"
+    assert recipes["mapit"].command == "limbs"
     assert recipes["mapit"].source == ".reaperrc"
     assert recipes["only-here"].source == "pyproject.toml"
     assert len(result.files) == 2

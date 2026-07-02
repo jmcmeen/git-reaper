@@ -23,7 +23,7 @@ fallback if the REAPER DAW already owns the short one).
 | Command | What it does |
 | --- | --- |
 | `harvest` | Gather files matching a pattern (default `*.md`) from a path or repo URL and concatenate them into one artifact with a provenance header and per-file dividers. |
-| `tree` | Hierarchical file listing as markdown or JSON. Depth limits, dirs-only, sizes, line counts, ignore rules. |
+| `limbs` | Hierarchical file listing (the tree, limb by limb) as markdown or JSON. Depth limits, dirs-only, sizes, line counts, ignore rules. |
 | `conjure` | Bundle a repo into a single LLM-ingestible file: tree first, then every text file inlined with spec'd delimiters. `--sha256` for verifiable hashes, `--split-tokens N` to shard into context-window-sized parts. |
 | `reanimate` | The inverse of `conjure`: reconstruct a directory tree from a packed artifact. `--verify` checks per-file hashes; path traversal is refused outright. |
 | `census` | File-type census: counts, sizes, line counts, language breakdown, token estimate. Size a repo before packing it. |
@@ -51,6 +51,29 @@ fallback if the REAPER DAW already owns the short one).
 History commands need real history, so remote sources are cloned full-depth
 (a previously shallow catacombs clone is unshallowed automatically).
 
+### Dark arts (security, risk, and forensics)
+
+| Command | What it does |
+| --- | --- |
+| `exhume` | Scan the full history for committed secrets (API keys, tokens, private keys) via regex signatures plus entropy. Reports commit, path, rule, and a masked preview, never the full secret. `--baseline` suppresses known findings; `--fail-on {any,high}` gates CI. |
+| `veil` | Scrub secrets and configured patterns from any artifact (or stdin) before it leaves the crypt, replacing each match with `[VEILED:rule-name]`. Shares one rules engine with `exhume`; also inline as `conjure --veil`. |
+| `omens` | Composite per-file risk prophecy: a weighted blend of churn, bug-fix density, recency, and size. `--lens {churn,bugs,age,all}`, weights configurable in the grimoire. Hints, not fate. |
+| `doppelgangers` | Find duplicate files by content hash. Reports clusters and reclaimable space. |
+| `bloat` | Largest files in the working tree and, for repos, the blobs deleted from the tree but still weighing down `.git`. |
+
+### Deeper necromancy
+
+| Command | What it does |
+| --- | --- |
+| `bones` | Strip implementation, keep structure: every file's imports, signatures, and docstrings. Python via `ast`; other languages via the `git-reaper[bones]` (tree-sitter) extra. |
+| `scry` | Compare two refs: churn, most-changed files, contributors, and souls first seen in the range. |
+| `plague` | Opt-in and network-using: read dependency manifests and check pinned versions against the OSV database. `--offline` parses manifests only. The only command that leaves the crypt. |
+| `necropolis` | Fan any source-taking command across every grave in a `necropolis.toml` manifest (or a GitHub `--org`). Per-repo artifacts plus a combined `INDEX.md`. |
+
+Analysis commands add `--format html` for a self-contained, dark-themed
+report. `exhume --fail-on`, `omens --fail-over`, `plague --fail-on`, and a
+cursed grave in `necropolis` all exit `3` for one-line CI gates.
+
 ```sh
 reaper harvest https://github.com/Textualize/rich --pattern "*.md" -o RICH.md
 reaper conjure . --sha256 --split-tokens 100000 -o PACKED.md
@@ -58,7 +81,7 @@ reaper reanimate PACKED.md --out risen/ --verify
 reaper census . --format csv | head
 reaper unfinished . --age
 reaper cast nightly-pack
-reaper tree . --format json | jq .file_count
+reaper limbs . --format json | jq .file_count
 reaper banish --older-than 7d
 
 reaper chronicle . --changelog
@@ -69,17 +92,56 @@ reaper graveyard . && reaper resurrect old/module.py --out risen/
 reaper ghosts . --than 90d
 reaper tombstone .
 
+reaper exhume . --fail-on any                 # CI secret gate (exit 3)
+reaper conjure . --veil -o SAFE.md            # pack, scrubbing secrets
+reaper omens . --lens churn -n 20             # riskiest files first
+reaper doppelgangers . && reaper bloat .      # duplicates, then heft
+reaper bones . -o MAP.md                      # structure without the flesh
+reaper scry v1.0.0 HEAD -o DELTA.md           # what changed between releases
+reaper plague . --offline                     # dependency advisories (opt-in net)
+reaper necropolis harvest --tag docs --out-dir out/   # fan out over a manifest
+reaper haunt . --format html -o hotspots.html # self-contained dark report
+
 reaper summon .            # interactive TUI (pip install "git-reaper[tui]")
 ```
 
-Recipes live in `.reaperrc` (or `[tool.reaper]` in pyproject.toml):
+Recipes live in `.reaperrc` (or `[tool.reaper]` in pyproject.toml), alongside
+custom secret rules and tunable omen weights:
 
 ```toml
 [recipes.nightly-pack]
 command = "conjure"
 args = [".", "--sha256", "--split-tokens", "100000", "--out", "PACKED.md"]
 description = "the whole crypt, sharded for the model"
+
+# extend the exhume/veil engine with your own signatures
+[rules.internal-host]
+pattern = "[a-z0-9-]+\\.corp\\.example\\.com"
+severity = "medium"
+veil_only = true   # veil redacts it; exhume does not report it as a secret
+
+# tune the omens blend (defaults shown)
+[omens]
+churn = 0.35
+bugs = 0.30
+age = 0.20
+size = 0.15
 ```
+
+## Optional extras
+
+The base install is lean. Heavier machinery lives behind extras:
+
+```sh
+pip install "git-reaper[bones]"    # tree-sitter: bones for JS/TS/Go/Rust/Java/...
+pip install "git-reaper[tui]"      # textual: the `reaper summon` TUI
+pip install "git-reaper[tokens]"   # tiktoken: exact token counts
+pip install "git-reaper[git]"      # GitPython backend (GIT_REAPER_BACKEND=gitpython)
+pip install "git-reaper[all]"      # everything
+```
+
+Third-party "rituals" extend the CLI through the `git_reaper.rituals` entry
+point: a package that registers a Typer sub-app appears as `reaper <name>`.
 
 ## Behavior you can rely on
 

@@ -164,3 +164,23 @@ def test_round_trip_property(tree: dict[str, str]):
         result = reanimate(text, dst, verify=True)
         assert result.verify_failures == []
         assert _tree_bytes(dst) == _tree_bytes(src)
+
+
+def test_veiled_pack_hashes_verify_round_trip(tmp_path, make_dir):
+    """--veil changes content, so hashes and receipts must describe the
+    veiled bytes; reanimate --verify holds and the secret never lands."""
+    from git_reaper.core.rules import BUILTIN_RULES
+
+    secret = "AKIAABCDEFGHIJKLMNOP"
+    root = make_dir({"config.py": f"KEY = '{secret}'\n", "safe.md": "# fine\n"})
+    rules = list(BUILTIN_RULES)
+    result = conjure(
+        resolve_source(str(root)).repo, with_sha256=True, veil_rules=rules
+    )
+    assert result.veiled == 1
+    text = "".join(part for _n, part in iter_parts(result, veil_rules=rules))
+    assert secret not in text and "[VEILED:aws-access-key]" in text
+    risen = tmp_path / "risen"
+    outcome = reanimate(text, risen, verify=True)
+    assert outcome.verify_failures == []
+    assert "[VEILED:aws-access-key]" in (risen / "config.py").read_text()

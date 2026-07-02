@@ -58,6 +58,18 @@ def test_blame_and_head_parity(necropolis, backends):
     assert sub.current_branch(necropolis) == gp.current_branch(necropolis)
 
 
+def test_blob_mining_parity(necropolis, backends):
+    sub, gp = backends
+    sub_blobs = sub.blobs(necropolis)
+    assert sub_blobs == gp.blobs(necropolis)
+    # cat_blob returns identical bytes, and attribution agrees.
+    blob = next(b for b in sub_blobs if b.path == "src/core.py")
+    assert sub.cat_blob(necropolis, blob.sha) == gp.cat_blob(necropolis, blob.sha)
+    assert sub.blob_commit(necropolis, blob.sha, blob.path) == gp.blob_commit(
+        necropolis, blob.sha, blob.path
+    )
+
+
 def test_full_command_parity_via_core(necropolis, backends):
     # The public commands must agree end-to-end, not just the raw backend.
     sub, gp = backends

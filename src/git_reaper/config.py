@@ -22,6 +22,9 @@ from git_reaper.models import ConfigValue, GrimoireResult, Recipe
 
 CONFIG_FILE = ".reaperrc"
 
+#: Default blend for the omens prophecy; override via [omens] in the grimoire.
+DEFAULT_OMEN_WEIGHTS: dict[str, float] = {"churn": 0.35, "bugs": 0.30, "age": 0.20, "size": 0.15}
+
 
 class GrimoireError(ValueError):
     """The grimoire is miswritten. Message names the file and the sin."""
@@ -96,6 +99,30 @@ def load_grimoire(root: Path | None = None) -> GrimoireResult:
         )
     )
 
+    layers = _layered_tables(root)
+    weights = omens_weights(root)
+    weights_source = next(
+        (source for source, table in reversed(layers) if table.get("omens")), "default"
+    )
+    result.settings.append(
+        ConfigValue(
+            key="omens_weights",
+            value=" ".join(f"{k}={weights[k]:g}" for k in sorted(weights)),
+            source=weights_source,
+        )
+    )
+    rules = custom_rules(root)
+    rules_source = next(
+        (source for source, table in reversed(layers) if table.get("rules")), "default"
+    )
+    result.settings.append(
+        ConfigValue(
+            key="custom_rules",
+            value=", ".join(sorted(rules)) if rules else "none",
+            source=rules_source if rules else "default",
+        )
+    )
+
     result.recipes = sorted(recipes.values(), key=lambda r: r.name)
     return result
 
@@ -105,3 +132,55 @@ def find_recipe(name: str, root: Path | None = None) -> Recipe | None:
         if recipe.name == name:
             return recipe
     return None
+
+
+def _layered_tables(root: Path | None = None) -> list[tuple[str, dict[str, Any]]]:
+    """Grimoire tables weakest-first: pyproject [tool.reaper], then .reaperrc."""
+    root = root or Path.cwd()
+    layers: list[tuple[str, dict[str, Any]]] = []
+    pyproject = root / "pyproject.toml"
+    if pyproject.is_file():
+        table = _load_toml(pyproject).get("tool", {}).get("reaper", {})
+        if isinstance(table, dict) and table:
+            layers.append(("pyproject.toml", table))
+    reaperrc = root / CONFIG_FILE
+    if reaperrc.is_file():
+        layers.append((CONFIG_FILE, _load_toml(reaperrc)))
+    return layers
+
+
+def custom_rules(root: Path | None = None) -> dict[str, dict[str, Any]]:
+    """[rules.<name>] tables for the shared exhume/veil engine.
+
+    .reaperrc outranks pyproject; validation of each rule's fields happens in
+    rules.load_rules, which owns what a rule means.
+    """
+    merged: dict[str, dict[str, Any]] = {}
+    for source, table in _layered_tables(root):
+        rules = table.get("rules", {})
+        if not isinstance(rules, dict):
+            raise GrimoireError(f"{source}: 'rules' must be a table of rule tables")
+        for name, spec in rules.items():
+            if not isinstance(spec, dict):
+                raise GrimoireError(f"{source}: rule {name!r} must be a table")
+            merged[name] = spec
+    return merged
+
+
+def omens_weights(root: Path | None = None) -> dict[str, float]:
+    """The [omens] weight blend, defaults filled in for missing keys."""
+    weights = dict(DEFAULT_OMEN_WEIGHTS)
+    for source, table in _layered_tables(root):
+        omens = table.get("omens", {})
+        if not isinstance(omens, dict):
+            raise GrimoireError(f"{source}: 'omens' must be a table of weights")
+        for key, value in omens.items():
+            if key not in DEFAULT_OMEN_WEIGHTS:
+                allowed = ", ".join(sorted(DEFAULT_OMEN_WEIGHTS))
+                raise GrimoireError(f"{source}: unknown omens weight {key!r} (use {allowed})")
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+                raise GrimoireError(f"{source}: omens weight {key!r} must be a number >= 0")
+            weights[key] = float(value)
+    if sum(weights.values()) <= 0:
+        raise GrimoireError("omens weights must not all be zero")
+    return weights

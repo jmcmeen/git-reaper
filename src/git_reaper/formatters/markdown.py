@@ -12,19 +12,27 @@ from typing import IO
 from git_reaper.fsutil import human_size
 from git_reaper.models import (
     AutopsyResult,
+    BloatResult,
+    BonesResult,
     CensusResult,
     ChronicleResult,
+    DoppelgangersResult,
+    ExhumeResult,
     GhostsResult,
     GraveyardResult,
     HarvestResult,
     HauntResult,
+    OmensResult,
+    PlagueResult,
     Provenance,
     RotResult,
+    ScryResult,
     SoulsResult,
     TombstoneResult,
     TreeNode,
     TreeResult,
     UnfinishedResult,
+    VeilResult,
 )
 
 _CHUNK = 65536
@@ -307,6 +315,176 @@ def _epitaph(message: str, width: int = 34) -> str:
     """Last words, trimmed (ASCII-only) so the tombstone stays a tombstone."""
     words = _cell(message)
     return words if len(words) <= width else words[: width - 3].rstrip() + "..."
+
+
+def render_exhume(result: ExhumeResult) -> str:
+    """Findings table, most severe first. Previews are masked, always."""
+    out = [render_provenance(result.provenance, "exhume")]
+    if result.findings:
+        out.append("\n| severity | rule | where | preview | commit | author |")
+        out.append("| --- | --- | --- | --- | --- | --- |")
+        for f in result.findings:
+            commit = f"`{_short(f.sha)}`" if f.sha else ""
+            out.append(
+                f"| {f.severity} | {f.rule} | {_cell(f.path)}:{f.line} "
+                f"| `{_cell(f.preview)}` (masked) | {commit} | {_cell(f.author)} |"
+            )
+    tallies = {"high": 0, "medium": 0, "low": 0}
+    for f in result.findings:
+        tallies[f.severity] = tallies.get(f.severity, 0) + 1
+    tally = ", ".join(f"{k}: {v}" for k, v in tallies.items() if v)
+    out.append(
+        f"\n{len(result.findings)} findings ({tally or 'none'}), "
+        f"{result.blobs_scanned} blobs scanned, {result.suppressed} baselined"
+    )
+    if not result.findings:
+        out.append("the dead kept their secrets.")
+    return "\n".join(out) + "\n"
+
+
+def render_veil(result: VeilResult) -> str:
+    """The veiling receipt. The artifact itself goes to --out, not here."""
+    out = [render_provenance(result.provenance, "veil")]
+    out.append(f"\nveiled: {result.input}\n")
+    if result.replacements:
+        out.append("| rule | replacements |")
+        out.append("| --- | ---: |")
+        for count in result.replacements:
+            out.append(f"| {count.rule} | {count.count} |")
+    out.append(f"\n{result.total} replacements")
+    return "\n".join(out) + "\n"
+
+
+def render_omens(result: OmensResult) -> str:
+    """The prophecy table, most cursed first. Hints, not fate."""
+    out = [render_provenance(result.provenance, "omens")]
+    weights = " ".join(f"{k}={v:g}" for k, v in result.weights.items())
+    out.append(f"\nlens: {result.lens}   weights: {weights}\n")
+    out.append("| omen | file | churn | bugs | age | size | commits |")
+    out.append("| ---: | --- | ---: | ---: | ---: | ---: | ---: |")
+    for omen in result.omens:
+        out.append(
+            f"| {omen.score:.3f} | {_cell(omen.path)} | {omen.churn_score:.2f} "
+            f"| {omen.bug_score:.2f} | {omen.age_score:.2f} | {omen.size_score:.2f} "
+            f"| {omen.commits} |"
+        )
+    out.append(f"\n{len(result.omens)} files read. omens are hints, not fate.")
+    return "\n".join(out) + "\n"
+
+
+def render_doppelgangers(result: DoppelgangersResult) -> str:
+    """Clusters of identical files, biggest waste first."""
+    out = [render_provenance(result.provenance, "doppelgangers")]
+    for cluster in result.clusters:
+        out.append(
+            f"\n## {human_size(cluster.size_bytes)} x {len(cluster.paths)} "
+            f"(reclaimable {human_size(cluster.reclaimable_bytes)})\n"
+        )
+        out.extend(f"- {path}" for path in cluster.paths)
+    out.append(
+        f"\n{len(result.clusters)} clusters in {result.files_scanned} files, "
+        f"{human_size(result.reclaimable_bytes)} reclaimable"
+    )
+    if not result.clusters:
+        out.append("every soul here is one of a kind.")
+    return "\n".join(out) + "\n"
+
+
+def render_bloat(result: BloatResult) -> str:
+    """Heaviest working-tree files, then the bodies still in the walls."""
+    out = [render_provenance(result.provenance, "bloat")]
+    out.append("\n## the living\n")
+    out.append("| file | size |")
+    out.append("| --- | ---: |")
+    for entry in result.tree:
+        out.append(f"| {_cell(entry.path)} | {human_size(entry.size_bytes)} |")
+    out.append(f"\nworking tree total: {human_size(result.tree_bytes)}")
+    if result.walls:
+        out.append("\n## the walls (blobs gone from the tree, not from .git)\n")
+        out.append("| last known as | size | blob |")
+        out.append("| --- | ---: | --- |")
+        for entry in result.walls:
+            out.append(
+                f"| {_cell(entry.path)} | {human_size(entry.size_bytes)} | `{_short(entry.sha)}` |"
+            )
+        out.append(f"\nstill in the walls: {human_size(result.walls_bytes)}")
+    return "\n".join(out) + "\n"
+
+
+def render_bones(result: BonesResult) -> str:
+    """The code map: stubs per file, implementation stripped."""
+    out = [render_provenance(result.provenance, "bones")]
+    for file in result.files:
+        out.append(f"\n## {file.path}\n")
+        if not file.parsed:
+            out.append(f"*skipped: {file.error}*")
+            continue
+        lines = ["```" + (file.language if file.language != "tsx" else "tsx")]
+        for entry in file.entries:
+            pad = "    " * entry.depth
+            lines.append(f"{pad}{entry.signature}")
+            if entry.doc:
+                lines.append(f'{pad}    """{entry.doc}"""')
+        lines.append("```")
+        out.append("\n".join(lines))
+    out.append(
+        f"\n{result.parsed_files} files mapped"
+        + (f", {result.skipped_files} skipped" if result.skipped_files else "")
+    )
+    return "\n".join(out) + "\n"
+
+
+def render_scry(result: ScryResult) -> str:
+    """The vision between two refs."""
+    out = [render_provenance(result.provenance, "scry")]
+    out.append(f"\n## {result.ref_a} .. {result.ref_b}\n")
+    out.append(
+        f"- {result.commits} commits, +{result.insertions}/-{result.deletions}"
+    )
+    if result.souls:
+        hands = ", ".join(f"{_cell(s.author)} ({s.commits})" for s in result.souls)
+        out.append(f"- hands: {hands}")
+    if result.new_souls:
+        out.append(f"- new souls: {', '.join(_cell(s) for s in result.new_souls)}")
+    out.append("\n| file | commits | +ins | -del |")
+    out.append("| --- | ---: | ---: | ---: |")
+    for delta in result.files:
+        out.append(
+            f"| {_cell(delta.path)} | {delta.commits} | {delta.insertions} | {delta.deletions} |"
+        )
+    out.append(f"\n{len(result.files)} files changed")
+    return "\n".join(out) + "\n"
+
+
+def render_plague(result: PlagueResult) -> str:
+    """Dependencies and their known afflictions."""
+    out = [render_provenance(result.provenance, "plague")]
+    if result.afflictions:
+        out.append("\n## afflictions\n")
+        out.append("| id | package | version | ecosystem | summary |")
+        out.append("| --- | --- | --- | --- | --- |")
+        for a in result.afflictions:
+            out.append(
+                f"| {a.id} | {_cell(a.package)} | {a.version} | {a.ecosystem} "
+                f"| {_cell(a.summary)} |"
+            )
+    out.append("\n## dependencies\n")
+    out.append("| package | version | ecosystem | manifest | pinned |")
+    out.append("| --- | --- | --- | --- | --- |")
+    for dep in result.dependencies:
+        out.append(
+            f"| {_cell(dep.name)} | {dep.version or '(range)'} | {dep.ecosystem} "
+            f"| {dep.manifest} | {'yes' if dep.pinned else 'no'} |"
+        )
+    status = (
+        f"{len(result.afflictions)} afflictions across {len(result.dependencies)} dependencies"
+        if result.checked
+        else "offline: manifests parsed, the oracle was not consulted"
+    )
+    if result.unpinned:
+        status += f" ({result.unpinned} unpinned, not queried)"
+    out.append(f"\n{status}")
+    return "\n".join(out) + "\n"
 
 
 def render_tree(result: TreeResult, with_sizes: bool = False, with_lines: bool = False) -> str:

@@ -12,7 +12,7 @@ authors = [{ name = "John McMeen" }]
 requires-python = ">=3.10"
 keywords = ["git", "cli", "llm", "repository", "analysis"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
@@ -36,11 +36,13 @@ dependencies = [
 git = ["GitPython>=3.1"]
 tokens = ["tiktoken>=0.7"]
 tui = ["textual>=0.80"]
-all = ["git-reaper[git,tokens,tui]"]
+bones = ["tree-sitter>=0.23", "tree-sitter-language-pack>=0.13"]
+all = ["git-reaper[git,tokens,tui,bones]"]
 
 [project.scripts]
-reaper = "git_reaper.cli:app"
-git-reaper = "git_reaper.cli:app"
+# run() (not app) so third-party rituals attach before dispatch
+reaper = "git_reaper.cli:run"
+git-reaper = "git_reaper.cli:run"
 
 [project.urls]
 Homepage = "https://github.com/jmcmeen/git-reaper"
@@ -107,6 +109,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # GitPython ships only in the [git] extra; the base type-check must not need it
 module = "git.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# tree-sitter ships only in the [bones] extra; the base type-check skips it
+module = "tree_sitter_language_pack"
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

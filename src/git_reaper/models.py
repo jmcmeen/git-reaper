@@ -110,6 +110,7 @@ class PackResult:
     token_estimate: int = 0
     split_tokens: int | None = None
     parts: int = 1
+    veiled: int = 0  # replacements made by --veil (0 when unveiled)
 
 
 @dataclass
@@ -414,6 +415,229 @@ class TombstoneResult:
     souls: int = 0
     last_words: str = ""
     witching_hour: str | None = None
+
+
+@dataclass
+class SecretFinding:
+    """One secret the exhumation turned up. Never carries the full secret."""
+
+    rule: str
+    severity: str  # "low", "medium", or "high"
+    path: str
+    line: int
+    preview: str  # masked: first/last 4 chars only
+    fingerprint: str  # sha256 of rule + secret; safe to store in a baseline
+    sha: str = ""  # commit that introduced it ("" when unattributed)
+    date: str = ""
+    author: str = ""
+
+
+@dataclass
+class ExhumeResult:
+    """Secrets dug out of the full history."""
+
+    provenance: Provenance
+    findings: list[SecretFinding] = field(default_factory=list)
+    blobs_scanned: int = 0
+    suppressed: int = 0  # findings silenced by the baseline
+
+
+@dataclass
+class VeilCount:
+    """How many times one rule fired during a veiling."""
+
+    rule: str
+    count: int = 0
+
+
+@dataclass
+class VeilResult:
+    """A redaction pass: what was hidden, never what it was."""
+
+    provenance: Provenance
+    input: str  # the artifact that was veiled ("-" for stdin)
+    replacements: list[VeilCount] = field(default_factory=list)
+    total: int = 0
+
+
+@dataclass
+class Omen:
+    """One file's risk prophecy. Scores are 0..1; omens are hints, not fate."""
+
+    path: str
+    score: float
+    churn_score: float = 0.0
+    bug_score: float = 0.0
+    age_score: float = 0.0
+    size_score: float = 0.0
+    commits: int = 0
+    churn: int = 0
+    bug_commits: int = 0
+    age_days: int = 0
+    size_bytes: int = 0
+
+
+@dataclass
+class OmensResult:
+    """Composite per-file risk, ranked most-cursed first."""
+
+    provenance: Provenance
+    lens: str = "all"
+    weights: dict[str, float] = field(default_factory=dict)
+    omens: list[Omen] = field(default_factory=list)
+
+
+@dataclass
+class CloneCluster:
+    """Files that are byte-for-byte the same soul in different bodies."""
+
+    sha256: str
+    size_bytes: int
+    paths: list[str] = field(default_factory=list)
+    reclaimable_bytes: int = 0  # (copies - 1) * size
+
+
+@dataclass
+class DoppelgangersResult:
+    """Duplicate files by content hash."""
+
+    provenance: Provenance
+    clusters: list[CloneCluster] = field(default_factory=list)
+    files_scanned: int = 0
+    reclaimable_bytes: int = 0
+
+
+@dataclass
+class BloatEntry:
+    """One heavy body: a working-tree file or a blob still in the walls."""
+
+    path: str
+    size_bytes: int
+    sha: str = ""  # blob sha for history entries
+    in_tree: bool = True
+
+
+@dataclass
+class BloatResult:
+    """The largest files, and the blobs deleted from the tree but not the past."""
+
+    provenance: Provenance
+    tree: list[BloatEntry] = field(default_factory=list)
+    walls: list[BloatEntry] = field(default_factory=list)  # dead blobs weighing down .git
+    tree_bytes: int = 0
+    walls_bytes: int = 0
+
+
+@dataclass
+class SkeletonEntry:
+    """One structural bone: an import, class, function, or method."""
+
+    kind: str  # "import", "class", "function", or "method"
+    name: str
+    signature: str
+    line: int
+    doc: str = ""  # first line of the docstring, when present
+    depth: int = 0  # nesting level, for indentation
+
+
+@dataclass
+class SkeletonFile:
+    """One file stripped to its structure."""
+
+    path: str
+    language: str
+    entries: list[SkeletonEntry] = field(default_factory=list)
+    parsed: bool = True
+    error: str | None = None  # why parsing failed (syntax, missing extra)
+
+
+@dataclass
+class BonesResult:
+    """Implementation stripped, structure kept: the compact code map."""
+
+    provenance: Provenance
+    files: list[SkeletonFile] = field(default_factory=list)
+    parsed_files: int = 0
+    skipped_files: int = 0
+
+
+@dataclass
+class ScryDelta:
+    """One file's churn between the two refs."""
+
+    path: str
+    commits: int = 0
+    insertions: int = 0
+    deletions: int = 0
+
+
+@dataclass
+class ScryResult:
+    """What changed between two refs: churn, files, and contributors."""
+
+    provenance: Provenance
+    ref_a: str = ""
+    ref_b: str = ""
+    commits: int = 0
+    insertions: int = 0
+    deletions: int = 0
+    files: list[ScryDelta] = field(default_factory=list)
+    souls: list[AuthorShare] = field(default_factory=list)  # active in the range
+    new_souls: list[str] = field(default_factory=list)  # first seen inside the range
+
+
+@dataclass
+class Dependency:
+    """One dependency read from a manifest."""
+
+    name: str
+    version: str | None
+    ecosystem: str  # "PyPI" or "npm"
+    manifest: str
+    pinned: bool = False
+
+
+@dataclass
+class Affliction:
+    """One known vulnerability afflicting a pinned dependency."""
+
+    id: str
+    package: str
+    version: str
+    ecosystem: str
+    summary: str = ""
+
+
+@dataclass
+class PlagueResult:
+    """Dependency manifests checked against the OSV database (opt-in network)."""
+
+    provenance: Provenance
+    dependencies: list[Dependency] = field(default_factory=list)
+    afflictions: list[Affliction] = field(default_factory=list)
+    checked: bool = False  # False when --offline (manifest parsing only)
+    unpinned: int = 0  # dependencies skipped because no exact version
+
+
+@dataclass
+class GraveOutcome:
+    """One repo's fate in a necropolis fan-out."""
+
+    name: str
+    source: str
+    ok: bool = False
+    exit_code: int = 0
+    artifact: str = ""
+    error: str = ""
+
+
+@dataclass
+class NecropolisResult:
+    """A command fanned across every grave in the manifest."""
+
+    command: str
+    graves: list[GraveOutcome] = field(default_factory=list)
+    index: str = ""  # path of the combined index artifact
 
 
 @dataclass

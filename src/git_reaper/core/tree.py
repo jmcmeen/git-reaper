@@ -17,14 +17,14 @@ def tree(
     with_sizes: bool = False,
     with_lines: bool = False,
     excludes: list[str] | None = None,
-    invoked: str = "reaper tree",
+    invoked: str = "reaper limbs",
     generated: str | None = None,
 ) -> TreeResult:
     """Build the hierarchy, honoring ignore rules and the depth limit."""
     root_path = Path(repo.path)
     matcher = IgnoreMatcher(root_path, extra_excludes=excludes)
     result = TreeResult(
-        provenance=make_provenance(schemas.artifact_schema("tree"), repo, invoked, generated),
+        provenance=make_provenance(schemas.artifact_schema("limbs"), repo, invoked, generated),
         root=TreeNode(name=root_path.name or str(root_path), path=".", is_dir=True),
     )
 

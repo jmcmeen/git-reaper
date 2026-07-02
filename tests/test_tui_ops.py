@@ -34,7 +34,7 @@ def test_each_operation_renders_its_own_artifact(necropolis):
         assert text.strip(), op.key
         if op.key == "tombstone":
             assert "R I P" in text  # art card, not a schema table
-        elif op.key == "tree":
+        elif op.key == "limbs":
             assert text.startswith("```") and "directories," in text  # fenced listing
         else:
             assert f"schema:    {op.key}/v1" in text, op.key

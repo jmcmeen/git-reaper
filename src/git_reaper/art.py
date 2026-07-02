@@ -7,6 +7,7 @@ by simply not calling into this module (see theme.theme_enabled).
 from __future__ import annotations
 
 import random
+from datetime import date
 
 HERO_SKULL = r"""
                 ______
@@ -63,3 +64,31 @@ def tombstone(lines: list[str]) -> str:
 def boo() -> str:
     """A random piece from the gallery, for the hidden `reaper boo`."""
     return random.choice([HERO_SKULL, NARROW_SKULL, MINI_SKULL, TOMBSTONE_DIVIDER])
+
+
+# -- easter eggs (tiny, harmless, all bypassed by --plain) -------------------
+
+JACK_O_LANTERN = r'''
+   .-~~~~~-.
+  /  ^   ^  \
+ |  /\   /\  |
+  \   d-b   /
+   \ \___/ /
+    `-----`
+'''
+
+
+def seasonal_banner(today: date | None = None) -> str | None:
+    """The special banner for the one night the veil is thin."""
+    today = today or date.today()
+    if today.month == 10 and today.day == 31:
+        return f"{JACK_O_LANTERN.rstrip()}\n  the veil is thin tonight"
+    return None
+
+
+def seasonal_footer(today: date | None = None) -> str | None:
+    """One line of dread on any Friday the 13th."""
+    today = today or date.today()
+    if today.day == 13 and today.weekday() == 4:
+        return "beware: it is Friday the 13th."
+    return None

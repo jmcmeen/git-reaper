@@ -1,6 +1,7 @@
 """Git backends, abstracted so the engine never shells out directly."""
 
 from git_reaper.gitio.backend import (
+    BlobRecord,
     BranchRecord,
     DeadFileRecord,
     FileChange,
@@ -12,6 +13,7 @@ from git_reaper.gitio.backend import (
 from git_reaper.gitio.subprocess_git import SubprocessGit
 
 __all__ = [
+    "BlobRecord",
     "BranchRecord",
     "DeadFileRecord",
     "FileChange",

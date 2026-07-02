@@ -21,15 +21,15 @@ repeat visits. Binary files and files over `--max-file-size` are skipped
 with a reason; `--max-total-size` aborts loudly instead of truncating
 silently.
 
-## tree
+## limbs
 
-Hierarchical file listing for any folder, git or not.
+Hierarchical file listing (the tree, limb by limb) for any folder, git or not.
 
 ```sh
-reaper tree .                       # ASCII tree, markdown-fenced
-reaper tree . --sizes --lines       # annotate files
-reaper tree . -d 2 --dirs-only      # shallow, directories only
-reaper tree . --format json         # machine-readable
+reaper limbs .                       # ASCII tree, markdown-fenced
+reaper limbs . --sizes --lines       # annotate files
+reaper limbs . -d 2 --dirs-only      # shallow, directories only
+reaper limbs . --format json         # machine-readable
 ```
 
 ## conjure
@@ -112,6 +112,147 @@ reaper cast nightly-pack
 reaper cast nightly-pack --split-tokens 50000   # override at cast time
 ```
 
+## Dark arts
+
+Security and risk mining. `exhume` and `veil` share one rules engine
+(`core/rules.py`): regex signatures plus a Shannon-entropy sweep, extended by
+`[rules.<name>]` tables in the grimoire. Neither ever writes a full secret to
+any output, log, or error message -- a found secret appears only masked, as
+`AKIA...MNOP`.
+
+### exhume
+
+Scan the full history (every reachable blob) for committed secrets. Reports
+the commit, path, rule, and a masked preview. `--baseline FILE` suppresses
+known findings (a JSON list of fingerprints, or a previous `--format json`
+report). `--fail-on {any,high}` gates CI with exit 3.
+
+```sh
+reaper exhume .                              # report, exit 0
+reaper exhume . --fail-on any                # one-line CI gate (exit 3)
+reaper exhume . --baseline known.json --fail-on high
+reaper exhume . --no-entropy --format html -o secrets.html
+```
+
+### veil
+
+Scrub secrets and configured patterns from any artifact before it leaves the
+crypt, replacing each match with `[VEILED:rule-name]`. Reads a file or stdin
+(`-`). Also available inline as `conjure --veil`.
+
+```sh
+reaper conjure . -o PACKED.md
+reaper veil PACKED.md -o SAFE.md --report md   # veiled artifact + a receipt
+cat secrets.log | reaper veil -                # scrub a stream
+```
+
+### omens
+
+Composite risk prophecy per file: a weighted blend of churn, bug-fix commit
+density, recency, and size, each normalized to 0..1. Lenses isolate one
+component; weights live in the grimoire's `[omens]` table. Omens are hints,
+not fate.
+
+```sh
+reaper omens .                       # the full blend, ranked
+reaper omens . --lens churn -n 20    # one lens, top 20
+reaper omens . --fail-over 0.8       # exit 3 if any file scores >= 0.8
+reaper omens . --format html -o risk.html
+```
+
+```toml
+# .reaperrc -- tune the blend (defaults shown)
+[omens]
+churn = 0.35
+bugs = 0.30
+age = 0.20
+size = 0.15
+```
+
+### doppelgangers
+
+Find duplicate files by content hash. Reports clusters and reclaimable space.
+Empty files are convention, not waste, and are ignored by default.
+
+```sh
+reaper doppelgangers .
+reaper doppelgangers . --min-size 4KB --format json
+```
+
+### bloat
+
+The largest files in the working tree and, for repos, the blobs deleted from
+the tree but still weighing down `.git` -- the body is still in the walls.
+
+```sh
+reaper bloat . -n 30
+reaper bloat . --format html -o bloat.html
+```
+
+## Deeper necromancy
+
+### bones
+
+Strip implementation, keep structure: every file's imports, class/function
+signatures, and docstring first lines. A compact code map that fits huge repos
+into small contexts. Python via the stdlib `ast` (zero deps); other languages
+need the `git-reaper[bones]` extra (tree-sitter), and are reported as skipped
+without it -- never silently dropped.
+
+```sh
+reaper bones .
+reaper bones . --format json
+pip install "git-reaper[bones]"    # adds JS, TS, Go, Rust, Java, C/C++, ...
+```
+
+### scry
+
+Compare two refs: total churn, the most-changed files, contributors active in
+the range, and which souls appeared for the first time. Reads git's `A..B`
+range.
+
+```sh
+reaper scry v1.0.0 v2.0.0
+reaper scry v1.0.0 HEAD -s . --format html -o release-delta.html
+```
+
+### plague
+
+Opt-in and network-using: read dependency manifests (pyproject, requirements,
+package.json) and check the exactly-pinned ones against the OSV database.
+`--offline` degrades gracefully to manifest parsing only. `--fail-on any`
+gates CI with exit 3. This is the only command that ever leaves the crypt.
+
+```sh
+reaper plague .                    # consult the OSV oracle
+reaper plague . --offline          # parse manifests, never touch the network
+reaper plague . --fail-on any      # exit 3 if any affliction is found
+```
+
+### necropolis
+
+Fan any source-taking reaper command across every grave in a
+`necropolis.toml` manifest (or a GitHub org via `--org` and the `gh` CLI).
+Writes a per-grave artifact plus a combined `INDEX.md` that records every
+outcome, failures included. A failed grave never stops the fleet.
+
+```sh
+reaper necropolis harvest --tag docs --out-dir out/
+reaper necropolis exhume --fail-on any --out-dir audit/   # exit 3 if cursed
+reaper necropolis census --org my-org --out-dir survey/
+```
+
+```toml
+# necropolis.toml
+[[grave]]
+source = "https://github.com/jmcmeen/observa.git"
+tags = ["docs"]
+
+[[grave]]
+source = "/local/path/to/repo"
+name = "beta"
+```
+
 ## pulse
 
 Signs-of-life check: git present and version, optional extras installed,
@@ -161,9 +302,14 @@ The reaper honors, in combination:
 Every JSON-emitting command publishes its output schema:
 
 ```sh
-reaper tree --schema
+reaper limbs --schema
 reaper harvest --schema
+reaper exhume --schema
 ```
+
+Analysis commands add `--format html` for a self-contained, dark-themed
+report (no external requests; styles and the only chart -- a CSS bar per
+row -- are inline).
 
 ## Exit codes
 
@@ -172,7 +318,11 @@ reaper harvest --schema
 | 0 | Rest in peace. Success. |
 | 1 | The ritual failed. Unexpected error. |
 | 2 | Bad incantation. Usage error. |
-| 3 | Cursed. Reserved: the scan succeeded and found what you feared. |
+| 3 | Cursed. The scan succeeded and found what you feared. |
+
+Exit 3 is what makes `reaper exhume --fail-on any` a one-line CI gate;
+`omens --fail-over`, `plague --fail-on`, and `necropolis` (when any grave is
+cursed) share the semantics.
 
 ## Plain output
 

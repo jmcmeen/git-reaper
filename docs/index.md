@@ -21,7 +21,7 @@ fallback if the REAPER DAW already owns the short one).
 reaper harvest https://github.com/Textualize/rich -o RICH.md
 
 # map a folder, any folder
-reaper tree . --sizes --lines
+reaper limbs . --sizes --lines
 
 # pack a repo for a model, then raise it back from the artifact
 reaper conjure . --sha256 -o PACKED.md
@@ -30,6 +30,9 @@ reaper reanimate PACKED.md --out risen/ --verify
 # size the crypt and list the unfinished business
 reaper census .
 reaper unfinished . --age
+
+# scan the whole history for committed secrets (one-line CI gate)
+reaper exhume . --fail-on any
 
 # is this thing alive?
 reaper pulse

@@ -14,6 +14,20 @@ The typed core, straight from the source.
 
 ::: git_reaper.core.tree
 
+::: git_reaper.core.rules
+
+::: git_reaper.core.risk
+
+::: git_reaper.core.dedupe
+
+::: git_reaper.core.skeleton
+
+::: git_reaper.core.scry
+
+::: git_reaper.core.plague
+
+::: git_reaper.core.fleet
+
 ::: git_reaper.core.pulse
 
 ## Cache

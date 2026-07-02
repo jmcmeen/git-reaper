@@ -84,7 +84,7 @@ def schema_for(cls: type) -> dict[str, Any]:
 #: derive from this mapping.
 COMMAND_MODELS: dict[str, type] = {
     "harvest": models.HarvestResult,
-    "tree": models.TreeResult,
+    "limbs": models.TreeResult,
     "conjure": models.PackResult,
     "reanimate": models.ReanimateResult,
     "census": models.CensusResult,
@@ -101,6 +101,15 @@ COMMAND_MODELS: dict[str, type] = {
     "ghosts": models.GhostsResult,
     "rot": models.RotResult,
     "tombstone": models.TombstoneResult,
+    "exhume": models.ExhumeResult,
+    "veil": models.VeilResult,
+    "omens": models.OmensResult,
+    "doppelgangers": models.DoppelgangersResult,
+    "bloat": models.BloatResult,
+    "bones": models.BonesResult,
+    "scry": models.ScryResult,
+    "plague": models.PlagueResult,
+    "necropolis": models.NecropolisResult,
 }
 
 #: Commands with no JSON output of their own (`cast` emits whatever the

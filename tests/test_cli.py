@@ -58,21 +58,21 @@ def test_usage_error_exits_2():
     assert result.exit_code == 2
 
 
-def test_tree_md_and_json(make_repo):
+def test_limbs_md_and_json(make_repo):
     root = make_repo(FILES)
-    md = runner.invoke(app, ["--plain", "tree", str(root)])
+    md = runner.invoke(app, ["--plain", "limbs", str(root)])
     assert md.exit_code == 0
     assert "|-- docs/" in md.stdout
 
-    js = runner.invoke(app, ["--plain", "tree", str(root), "--format", "json"])
+    js = runner.invoke(app, ["--plain", "limbs", str(root), "--format", "json"])
     data = json.loads(js.stdout)
-    assert data["provenance"]["schema"] == schemas.artifact_schema("tree")
+    assert data["provenance"]["schema"] == schemas.artifact_schema("limbs")
 
 
 def test_bad_format_exits_1(make_repo):
     root = make_repo(FILES)
-    tree = runner.invoke(app, ["--plain", "tree", str(root), "--format", "yaml"])
-    assert tree.exit_code == 1
+    limbs = runner.invoke(app, ["--plain", "limbs", str(root), "--format", "yaml"])
+    assert limbs.exit_code == 1
     pulse = runner.invoke(app, ["--plain", "pulse", "--format", "yaml"])
     assert pulse.exit_code == 1
 
@@ -278,3 +278,162 @@ def test_history_writes_pure_artifact_to_out(necropolis, tmp_path):
     assert result.exit_code == 0
     assert result.stdout == ""  # narration went to stderr; artifact to the file
     assert "git-reaper chronicle" in out.read_text()
+
+
+# --------------------------------------------------------------------------
+# dark arts (Phase 5) and the necropolis (Phase 6)
+# --------------------------------------------------------------------------
+
+AWS_KEY = "AKIAABCDEFGHIJKLMNOP"
+
+
+def test_exhume_cli_exits_3_only_with_fail_on(make_repo):
+    root = make_repo({"leak.env": f"KEY={AWS_KEY}\n"})
+    found = runner.invoke(app, ["--plain", "exhume", str(root)])
+    assert found.exit_code == 0  # decision: gates are explicit opt-in
+    assert AWS_KEY not in found.output  # masked everywhere, always
+    cursed = runner.invoke(app, ["--plain", "exhume", str(root), "--fail-on", "any"])
+    assert cursed.exit_code == 3
+    clean_root = make_repo({"a.md": "hi\n"}, name="clean")
+    clean = runner.invoke(app, ["--plain", "exhume", str(clean_root), "--fail-on", "any"])
+    assert clean.exit_code == 0
+
+
+def test_exhume_bad_fail_on_exits_1(make_repo):
+    root = make_repo({"a.md": "hi\n"})
+    result = runner.invoke(app, ["--plain", "exhume", str(root), "--fail-on", "sometimes"])
+    assert result.exit_code == 1
+
+
+def test_exhume_baseline_flow(make_repo, tmp_path):
+    root = make_repo({"leak.env": f"KEY={AWS_KEY}\n"})
+    report = tmp_path / "baseline.json"
+    first = runner.invoke(
+        app, ["--plain", "exhume", str(root), "--format", "json", "--out", str(report)]
+    )
+    assert first.exit_code == 0
+    gated = runner.invoke(
+        app,
+        ["--plain", "exhume", str(root), "--baseline", str(report), "--fail-on", "any"],
+    )
+    assert gated.exit_code == 0  # every finding is baselined
+
+
+def test_veil_reads_stdin_writes_stdout():
+    result = runner.invoke(app, ["--plain", "veil", "-"], input=f"key={AWS_KEY}\n")
+    assert result.exit_code == 0
+    assert "[VEILED:aws-access-key]" in result.stdout
+    assert AWS_KEY not in result.stdout
+
+
+def test_veil_report_requires_out(tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text(f"{AWS_KEY}\n")
+    no_out = runner.invoke(app, ["--plain", "veil", str(secret), "--report", "json"])
+    assert no_out.exit_code == 1
+    out = tmp_path / "veiled.txt"
+    ok = runner.invoke(
+        app, ["--plain", "veil", str(secret), "--out", str(out), "--report", "json"]
+    )
+    assert ok.exit_code == 0
+    assert AWS_KEY not in out.read_text()
+    receipt = json.loads(ok.stdout)
+    assert receipt["total"] == 1
+
+
+def test_conjure_veil_scrubs_the_pack(make_repo):
+    root = make_repo({"config.py": f"KEY = '{AWS_KEY}'\n"})
+    result = runner.invoke(app, ["--plain", "conjure", str(root), "--veil"])
+    assert result.exit_code == 0
+    assert "[VEILED:aws-access-key]" in result.stdout
+    assert AWS_KEY not in result.stdout
+
+
+def test_omens_cli_and_fail_over(necropolis):
+    ok = runner.invoke(app, ["--plain", "omens", str(necropolis), "--format", "json"])
+    assert ok.exit_code == 0
+    data = json.loads(ok.stdout)
+    assert data["provenance"]["schema"] == schemas.artifact_schema("omens")
+    assert data["omens"]
+    gated = runner.invoke(app, ["--plain", "omens", str(necropolis), "--fail-over", "0.0"])
+    assert gated.exit_code == 3
+    bad_lens = runner.invoke(app, ["--plain", "omens", str(necropolis), "--lens", "tarot"])
+    assert bad_lens.exit_code == 1
+
+
+def test_doppelgangers_cli(make_dir):
+    root = make_dir({"a.txt": "same\n", "b.txt": "same\n"})
+    result = runner.invoke(app, ["--plain", "doppelgangers", str(root), "--format", "json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert len(data["clusters"]) == 1
+
+
+def test_bloat_cli(necropolis):
+    result = runner.invoke(app, ["--plain", "bloat", str(necropolis), "--format", "json"])
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["tree"]
+    assert any(w["path"] == "src/core.py" for w in data["walls"])
+
+
+def test_bones_cli(make_dir):
+    root = make_dir({"mod.py": "def f():\n    pass\n"})
+    result = runner.invoke(app, ["--plain", "bones", str(root)])
+    assert result.exit_code == 0
+    assert "def f()" in result.stdout
+
+
+def test_scry_cli(necropolis):
+    result = runner.invoke(
+        app, ["--plain", "scry", "v1.0.0", "HEAD", "-s", str(necropolis), "--format", "json"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["ref_a"] == "v1.0.0"
+    missing = runner.invoke(app, ["--plain", "scry"])
+    assert missing.exit_code == 1
+
+
+def test_plague_cli_offline(make_dir):
+    root = make_dir({"requirements.txt": "flask==3.0.0\n"})
+    result = runner.invoke(app, ["--plain", "plague", str(root), "--offline"])
+    assert result.exit_code == 0
+    assert "oracle was not consulted" in result.stdout
+
+
+def test_html_format_writes_a_page(make_repo, tmp_path):
+    root = make_repo(FILES)
+    out = tmp_path / "report.html"
+    result = runner.invoke(
+        app, ["--plain", "census", str(root), "--format", "html", "--out", str(out)]
+    )
+    assert result.exit_code == 0
+    assert out.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_necropolis_cli(make_repo, tmp_path):
+    alpha = make_repo(FILES, name="alpha")
+    manifest = tmp_path / "necropolis.toml"
+    manifest.write_text(f'[[grave]]\nsource = "{alpha.as_posix()}"\n')
+    out_dir = tmp_path / "fleet"
+    result = runner.invoke(
+        app,
+        [
+            "--plain",
+            "necropolis",
+            "census",
+            "--manifest",
+            str(manifest),
+            "--out-dir",
+            str(out_dir),
+        ],
+    )
+    assert result.exit_code == 0
+    assert (out_dir / "alpha.md").is_file()
+    assert "1 of 1 graves reaped" in (out_dir / "INDEX.md").read_text()
+
+
+def test_necropolis_refuses_recursion(tmp_path):
+    result = runner.invoke(app, ["--plain", "necropolis", "necropolis"])
+    assert result.exit_code == 1

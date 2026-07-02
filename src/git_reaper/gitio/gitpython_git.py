@@ -15,6 +15,7 @@ from typing import Any
 
 from git_reaper.gitio import logparse
 from git_reaper.gitio.backend import (
+    BlobRecord,
     BranchRecord,
     DeadFileRecord,
     GitBackend,
@@ -159,3 +160,25 @@ class GitPythonGit(GitBackend):
 
     def tags(self, repo: Path) -> list[TagRecord]:
         return logparse.parse_tags(self._exec(repo, logparse.tag_ref_args()))
+
+    # -- object mining (Phase 5) ---------------------------------------------
+
+    def blobs(self, repo: Path) -> list[BlobRecord]:
+        return logparse.parse_blobs(
+            self._exec(repo, logparse.object_list_args()),
+            self._exec(repo, logparse.batch_check_args()),
+        )
+
+    def cat_blob(self, repo: Path, sha: str) -> bytes | None:
+        try:
+            data: bytes = self._repo(repo).odb.stream(bytes.fromhex(sha)).read()
+            return data
+        except Exception:
+            return None
+
+    def blob_commit(self, repo: Path, sha: str, path: str) -> tuple[str, str, str] | None:
+        try:
+            out = self._exec(repo, logparse.blob_commit_args(sha, path))
+        except self._git.GitCommandError:
+            return None
+        return logparse.parse_blob_commit(out)

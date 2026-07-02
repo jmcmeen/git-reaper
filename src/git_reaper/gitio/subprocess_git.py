@@ -13,6 +13,7 @@ from pathlib import Path
 
 from git_reaper.gitio import logparse
 from git_reaper.gitio.backend import (
+    BlobRecord,
     BranchRecord,
     DeadFileRecord,
     GitBackend,
@@ -182,3 +183,33 @@ class SubprocessGit(GitBackend):
 
     def tags(self, repo: Path) -> list[TagRecord]:
         return logparse.parse_tags(self._run(logparse.tag_ref_args(), cwd=repo))
+
+    # -- object mining (Phase 5) ---------------------------------------------
+
+    def blobs(self, repo: Path) -> list[BlobRecord]:
+        return logparse.parse_blobs(
+            self._run(logparse.object_list_args(), cwd=repo),
+            self._run(logparse.batch_check_args(), cwd=repo),
+        )
+
+    def cat_blob(self, repo: Path, sha: str) -> bytes | None:
+        proc = subprocess.run(
+            [self._require_git(), "cat-file", "blob", sha],
+            cwd=repo,
+            capture_output=True,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout
+
+    def blob_commit(self, repo: Path, sha: str, path: str) -> tuple[str, str, str] | None:
+        proc = subprocess.run(
+            [self._require_git(), *logparse.blob_commit_args(sha, path)],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+        if proc.returncode != 0:
+            return None
+        return logparse.parse_blob_commit(proc.stdout)

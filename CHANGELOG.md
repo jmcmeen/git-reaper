@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-02
+
+Dark Arts and the Necropolis. The security and multi-repo phases land
+together, and the reaper reaches 1.0.
+
+### Added
+
+- `reaper exhume [SOURCE]` - scan the full history (every reachable blob) for
+  committed secrets via regex signatures plus a Shannon-entropy sweep.
+  Previews are masked (`AKIA...MNOP`), never the full secret. `--baseline`
+  suppresses known findings (a JSON fingerprint list or a prior `--format
+  json` report); `--fail-on {any,high}` gates CI with exit `3`.
+- `reaper veil ARTIFACT` - scrub secrets and configured patterns from any
+  artifact (or stdin, `-`), replacing each match with `[VEILED:rule-name]`.
+  Shares one rules engine (`core/rules.py`) with `exhume`; also inline as
+  `conjure --veil`, whose per-file hashes and receipts describe the veiled
+  bytes so the round trip still verifies.
+- `reaper omens [SOURCE]` - composite per-file risk prophecy: a weighted
+  blend of churn, bug-fix commit density, recency, and size, each normalized
+  to 0..1. `--lens {all,churn,bugs,age,size}`; weights configurable via the
+  grimoire's `[omens]` table. `--fail-over N` gates CI with exit `3`. Omens
+  are framed as hints, not fate.
+- `reaper doppelgangers [SOURCE]` - find duplicate files by content hash,
+  reporting clusters and reclaimable space (empty files ignored by default).
+- `reaper bloat [SOURCE]` - the largest working-tree files and, in a repo,
+  the blobs deleted from the tree but still weighing down `.git`.
+- `reaper bones [SOURCE]` - strip implementation, keep structure: imports,
+  signatures, and docstrings. Python via stdlib `ast`; other languages via
+  the new `git-reaper[bones]` (tree-sitter) extra, reported as skipped
+  without it, never silently dropped.
+- `reaper scry REF_A REF_B` - compare two refs: churn, most-changed files,
+  contributors, and souls first seen in the range. Graduated from the back
+  of the crypt now that `omens` has stabilized.
+- `reaper plague [SOURCE]` - opt-in, network-using: read dependency manifests
+  (pyproject, requirements, package.json) and check the exactly-pinned ones
+  against the OSV database. `--offline` degrades to manifest parsing only;
+  `--fail-on any` gates CI. The only command that ever leaves the crypt.
+- `reaper necropolis COMMAND` - fan any source-taking command across every
+  grave in a `necropolis.toml` manifest (or a GitHub `--org` via the `gh`
+  CLI). Writes per-repo artifacts plus a combined `INDEX.md`; a failed grave
+  never stops the fleet, and a cursed grave propagates exit `3`.
+- HTML report output (`--format html`) for the analysis commands: a
+  self-contained, dark-themed page with inline CSS bar charts and no external
+  requests.
+- Exit code `3` ("cursed") is now live, wired into every `--fail-on` /
+  `--fail-over` gate for one-line CI usage.
+- Third-party rituals: the `git_reaper.rituals` entry-point group mounts
+  external Typer sub-apps as `reaper <name>`; a broken plugin is reported and
+  skipped, never fatal.
+- Grimoire extensions: `[rules.<name>]` tables extend the shared secret/PII
+  engine, and `[omens]` weights tune the risk blend. `grimoire` now reports
+  both, with their source.
+- Easter eggs: a Halloween banner on October 31 and a Friday-the-13th footer,
+  both bypassed by `--plain`.
+- Git backend gains blob-level mining (`blobs`, `cat_blob`, `blob_commit`),
+  with subprocess/GitPython parity tests.
+
+### Changed
+
+- **Breaking:** the `tree` command is now `limbs` (its artifact schema is
+  `limbs/v1`). One themed name per command, as the naming decision requires.
+
 ## [0.4.0] - 2026-07-02
 
 The Summoning. An interactive TUI over the same core the CLI drives.

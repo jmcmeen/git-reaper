@@ -74,6 +74,15 @@ class TagRecord:
     date: str
 
 
+@dataclass
+class BlobRecord:
+    """One unique blob reachable from history: sha, an example path, size."""
+
+    sha: str
+    path: str
+    size_bytes: int
+
+
 class GitBackend(ABC):
     """The minimal git surface v0.1 needs."""
 
@@ -139,6 +148,22 @@ class GitBackend(ABC):
     @abstractmethod
     def branches(self, repo: Path) -> list[BranchRecord]:
         """Local branches with tip activity and merged/gone-upstream flags."""
+
+    # -- object mining (Phase 5: exhume, bloat) -----------------------------
+
+    @abstractmethod
+    def blobs(self, repo: Path) -> list[BlobRecord]:
+        """Every unique blob reachable from any ref, with one example path
+        and its uncompressed size, sorted by sha for determinism."""
+
+    @abstractmethod
+    def cat_blob(self, repo: Path, sha: str) -> bytes | None:
+        """Raw bytes of one blob, or None if it does not exist."""
+
+    @abstractmethod
+    def blob_commit(self, repo: Path, sha: str, path: str) -> tuple[str, str, str] | None:
+        """(commit sha, iso date, author) of the oldest commit that touched
+        this blob at this path, or None when unattributable."""
 
     @abstractmethod
     def tags(self, repo: Path) -> list[TagRecord]:

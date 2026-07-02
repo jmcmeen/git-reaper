@@ -34,7 +34,7 @@ def test_reap_populates_preview(necropolis):
         app = ReaperApp(source=str(necropolis))
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause()
-            app.action_reap()  # default ritual is 'tree'
+            app.action_reap()  # default ritual is 'limbs'
             await app.workers.wait_for_complete()
             await pilot.pause()
             preview = app.query_one("#preview", TextArea).text
