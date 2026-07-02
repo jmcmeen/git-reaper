@@ -937,12 +937,8 @@ def exhume_cmd(
 
 @app.command("veil")
 def veil_cmd(
-    artifact: str | None = typer.Argument(
-        None, help="Artifact to veil ('-' reads stdin)."
-    ),
-    out: Path | None = typer.Option(
-        None, "--out", "-o", help="Veiled artifact (default stdout)."
-    ),
+    artifact: str | None = typer.Argument(None, help="Artifact to veil ('-' reads stdin)."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Veiled artifact (default stdout)."),
     no_entropy: bool = typer.Option(
         False, "--no-entropy", help="Signatures only; skip the entropy sweep."
     ),
@@ -1146,8 +1142,7 @@ def bones_cmd(
     if result.skipped_files:
         _say(
             "ember",
-            f"{result.skipped_files} files skipped "
-            "(non-Python languages need `git-reaper[bones]`)",
+            f"{result.skipped_files} files skipped (non-Python languages need `git-reaper[bones]`)",
         )
     if fmt == "json":
         _emit(jsonfmt.render(result), out)
@@ -1291,8 +1286,10 @@ def necropolis_cmd(
         )
     _banner()
     try:
-        graves = fleet_core.org_graves(org, limit=org_limit) if org else (
-            fleet_core.load_manifest(manifest)
+        graves = (
+            fleet_core.org_graves(org, limit=org_limit)
+            if org
+            else (fleet_core.load_manifest(manifest))
         )
     except fleet_core.FleetError as exc:
         raise _die(str(exc)) from exc
@@ -1312,9 +1309,7 @@ def necropolis_cmd(
         return 0
 
     passthrough = list(ctx.args)
-    result = fleet_core.necropolis(
-        command, passthrough, graves, out_dir, _runner, tag=tag
-    )
+    result = fleet_core.necropolis(command, passthrough, graves, out_dir, _runner, tag=tag)
     for outcome in result.graves:
         if outcome.ok:
             _say("necro", f"reaped {outcome.name}")

@@ -412,10 +412,22 @@ class ReaperApp(App[None]):
 
     def _apply_recipe_options(self, recipe: Recipe) -> None:
         """Best-effort: map a recipe's flags onto the options panel widgets."""
-        flags = {"--limit": "limit", "-n": "limit", "--lens": "lens", "--than": "than",
-                 "--min-size": "min_size", "--format": "format", "-f": "format"}
-        toggles = {"--heatmap": "heatmap", "--changelog": "changelog", "--age": "age",
-                   "--no-entropy": "no_entropy", "--offline": "offline"}
+        flags = {
+            "--limit": "limit",
+            "-n": "limit",
+            "--lens": "lens",
+            "--than": "than",
+            "--min-size": "min_size",
+            "--format": "format",
+            "-f": "format",
+        }
+        toggles = {
+            "--heatmap": "heatmap",
+            "--changelog": "changelog",
+            "--age": "age",
+            "--no-entropy": "no_entropy",
+            "--offline": "offline",
+        }
         names = {spec.name for spec in self.current_op.options}
         args = recipe.args
         for i, arg in enumerate(args):

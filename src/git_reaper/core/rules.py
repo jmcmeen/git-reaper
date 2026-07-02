@@ -226,9 +226,7 @@ def load_baseline(path: Path) -> set[str]:
     if isinstance(data, dict):
         findings = data.get("findings", [])
         if isinstance(findings, list):
-            return {
-                str(f.get("fingerprint")) for f in findings if isinstance(f, dict)
-            } - {"None"}
+            return {str(f.get("fingerprint")) for f in findings if isinstance(f, dict)} - {"None"}
     raise RuleError(f"baseline {path}: expected a JSON list or an exhume JSON report")
 
 
@@ -322,9 +320,7 @@ class VeiledText:
         return sum(self.counts.values())
 
 
-def veil_text(
-    text: str, rules: list[Rule] | None = None, with_entropy: bool = True
-) -> VeiledText:
+def veil_text(text: str, rules: list[Rule] | None = None, with_entropy: bool = True) -> VeiledText:
     """Replace every rule hit with `[VEILED:rule-name]`."""
     matches = scan_text(text, rules=rules, with_entropy=with_entropy)
     counts: dict[str, int] = {}

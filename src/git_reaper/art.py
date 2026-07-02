@@ -68,14 +68,14 @@ def boo() -> str:
 
 # -- easter eggs (tiny, harmless, all bypassed by --plain) -------------------
 
-JACK_O_LANTERN = r'''
+JACK_O_LANTERN = r"""
    .-~~~~~-.
   /  ^   ^  \
  |  /\   /\  |
   \   d-b   /
    \ \___/ /
     `-----`
-'''
+"""
 
 
 def seasonal_banner(today: date | None = None) -> str | None:

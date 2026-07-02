@@ -84,7 +84,7 @@ def _provenance_block(prov: Provenance, kind: str) -> str:
         f"tool:      git-reaper {prov.tool_version}",
         f"invoked:   {prov.invoked}",
     ]
-    return "<div class=\"provenance\">" + _esc("\n".join(lines)) + "</div>"
+    return '<div class="provenance">' + _esc("\n".join(lines)) + "</div>"
 
 
 def _cell_html(cell: Cell, bar: bool, peak: float) -> str:
@@ -114,9 +114,7 @@ def _table(headers: list[str], rows: list[list[Cell]], bar_col: int | None) -> s
     parts.append("</tr></thead><tbody>")
     for row in rows:
         parts.append("<tr>")
-        parts += [
-            _cell_html(cell, bar=(i == bar_col), peak=peak) for i, cell in enumerate(row)
-        ]
+        parts += [_cell_html(cell, bar=(i == bar_col), peak=peak) for i, cell in enumerate(row)]
         parts.append("</tr>")
     parts.append("</tbody></table>")
     return "".join(parts)
@@ -130,7 +128,7 @@ def _page(title: str, prov: Provenance, kind: str, sections: list[Section], foot
         body.append(_table(headers, rows, bar_col))
     body.append(f'<div class="footer">{_esc(footer)}</div>')
     return (
-        "<!DOCTYPE html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
+        '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
         f"<title>git-reaper {_esc(title)}</title>"
         f"<style>{_CSS}</style></head>\n<body>\n" + "\n".join(body) + "\n</body></html>\n"
     )
@@ -194,15 +192,29 @@ def _chronicle_sections(result: ChronicleResult) -> tuple[list[Section], str]:
         for section in result.changelog:
             title = section.tag if section.date is None else f"{section.tag} ({section.date})"
             rows = [
-                [_code(c.sha[:7]), c.date, c.author, c.message, _num(c.files_changed),
-                 _num(c.insertions), _num(c.deletions)]
+                [
+                    _code(c.sha[:7]),
+                    c.date,
+                    c.author,
+                    c.message,
+                    _num(c.files_changed),
+                    _num(c.insertions),
+                    _num(c.deletions),
+                ]
                 for c in section.commits
             ]
             sections.append((title, headers, rows, 5))
     else:
         rows = [
-            [_code(c.sha[:7]), c.date, c.author, c.message, _num(c.files_changed),
-             _num(c.insertions), _num(c.deletions)]
+            [
+                _code(c.sha[:7]),
+                c.date,
+                c.author,
+                c.message,
+                _num(c.files_changed),
+                _num(c.insertions),
+                _num(c.deletions),
+            ]
             for c in result.commits
         ]
         sections.append(("", headers, rows, 5))
@@ -211,8 +223,15 @@ def _chronicle_sections(result: ChronicleResult) -> tuple[list[Section], str]:
 
 def _souls_sections(result: SoulsResult) -> tuple[list[Section], str]:
     rows = [
-        [s.name, s.email, _num(s.commits), _num(s.insertions), _num(s.deletions),
-         s.first_seen, s.last_seen]
+        [
+            s.name,
+            s.email,
+            _num(s.commits),
+            _num(s.insertions),
+            _num(s.deletions),
+            s.first_seen,
+            s.last_seen,
+        ]
         for s in result.souls
     ]
     footer = (
@@ -245,7 +264,8 @@ def _ghosts_sections(result: GhostsResult) -> tuple[list[Section], str]:
     rows = []
     for b in result.branches:
         flags = ", ".join(
-            f for f, on in (("merged", b.merged), ("gone", b.gone_upstream), ("stale", b.stale))
+            f
+            for f, on in (("merged", b.merged), ("gone", b.gone_upstream), ("stale", b.stale))
             if on
         )
         rows.append([b.name, b.last_commit, _num(b.age_days, f"{b.age_days}d"), b.author, flags])
@@ -388,8 +408,13 @@ def _plague_sections(result: PlagueResult) -> tuple[list[Section], str]:
             "dependencies",
             ["package", "version", "ecosystem", "manifest", "pinned"],
             [
-                [d.name, d.version or "(range)", d.ecosystem, d.manifest,
-                 "yes" if d.pinned else "no"]
+                [
+                    d.name,
+                    d.version or "(range)",
+                    d.ecosystem,
+                    d.manifest,
+                    "yes" if d.pinned else "no",
+                ]
                 for d in result.dependencies
             ],
             None,

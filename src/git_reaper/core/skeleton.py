@@ -114,9 +114,11 @@ def _python_bones(rel: str, text: str) -> SkeletonFile:
 
 
 def _first_doc_line(node: ast.AST) -> str:
-    doc = ast.get_docstring(node, clean=True) if isinstance(
-        node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
-    ) else None
+    doc = (
+        ast.get_docstring(node, clean=True)
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        else None
+    )
     return doc.strip().splitlines()[0] if doc else ""
 
 

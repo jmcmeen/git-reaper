@@ -174,9 +174,7 @@ def test_veiled_pack_hashes_verify_round_trip(tmp_path, make_dir):
     secret = "AKIAABCDEFGHIJKLMNOP"
     root = make_dir({"config.py": f"KEY = '{secret}'\n", "safe.md": "# fine\n"})
     rules = list(BUILTIN_RULES)
-    result = conjure(
-        resolve_source(str(root)).repo, with_sha256=True, veil_rules=rules
-    )
+    result = conjure(resolve_source(str(root)).repo, with_sha256=True, veil_rules=rules)
     assert result.veiled == 1
     text = "".join(part for _n, part in iter_parts(result, veil_rules=rules))
     assert secret not in text and "[VEILED:aws-access-key]" in text

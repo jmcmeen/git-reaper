@@ -332,9 +332,7 @@ def test_veil_report_requires_out(tmp_path):
     no_out = runner.invoke(app, ["--plain", "veil", str(secret), "--report", "json"])
     assert no_out.exit_code == 1
     out = tmp_path / "veiled.txt"
-    ok = runner.invoke(
-        app, ["--plain", "veil", str(secret), "--out", str(out), "--report", "json"]
-    )
+    ok = runner.invoke(app, ["--plain", "veil", str(secret), "--out", str(out), "--report", "json"])
     assert ok.exit_code == 0
     assert AWS_KEY not in out.read_text()
     receipt = json.loads(ok.stdout)

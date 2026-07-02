@@ -64,8 +64,15 @@ def test_reap_result_carries_a_summary(necropolis):
 def test_history_operations_are_flagged():
     needs = {op.key for op in tui_ops.OPERATIONS if op.needs_git}
     assert needs == {
-        "chronicle", "souls", "haunt", "graveyard", "rot", "ghosts",
-        "tombstone", "exhume", "omens",
+        "chronicle",
+        "souls",
+        "haunt",
+        "graveyard",
+        "rot",
+        "ghosts",
+        "tombstone",
+        "exhume",
+        "omens",
     }
 
 

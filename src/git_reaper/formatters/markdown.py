@@ -438,9 +438,7 @@ def render_scry(result: ScryResult) -> str:
     """The vision between two refs."""
     out = [render_provenance(result.provenance, "scry")]
     out.append(f"\n## {result.ref_a} .. {result.ref_b}\n")
-    out.append(
-        f"- {result.commits} commits, +{result.insertions}/-{result.deletions}"
-    )
+    out.append(f"- {result.commits} commits, +{result.insertions}/-{result.deletions}")
     if result.souls:
         hands = ", ".join(f"{_cell(s.author)} ({s.commits})" for s in result.souls)
         out.append(f"- hands: {hands}")
