@@ -102,6 +102,11 @@ ignore_missing_imports = true
 module = "tomli"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# GitPython ships only in the [git] extra; the base type-check must not need it
+module = "git.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

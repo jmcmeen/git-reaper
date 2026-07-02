@@ -45,13 +45,18 @@ def banner(version: str, width: int = 80) -> str:
 
 
 def tombstone(lines: list[str]) -> str:
-    """Render lines of text inside ASCII tombstone art."""
-    inner = max(len(line) for line in lines) if lines else 0
+    """Render lines of text inside ASCII tombstone art.
+
+    The frame is sized to the widest line so the right border always closes
+    flush, however long the epitaph runs.
+    """
+    content = ["R I P", "", *lines]
+    inner = max((len(line) for line in content), default=0)
     inner = max(inner, 11)
-    top = "         " + "_" * inner
-    body = [f"        /{' ' * inner}\\"]
-    body.extend(f"       | {line.center(inner - 2)} |" for line in ["R I P", "", *lines])
-    body.append("    ___|" + "_" * inner + "|___")
+    top = "         " + "_" * (inner + 2)
+    body = [f"        /{' ' * (inner + 2)}\\"]
+    body.extend(f"       | {line.center(inner)} |" for line in content)
+    body.append("    ___|" + "_" * (inner + 2) + "|___")
     return "\n".join([top, *body])
 
 

@@ -151,3 +151,111 @@ def test_pulse_runs():
 def test_banish_empty_catacombs():
     result = runner.invoke(app, ["--plain", "banish"])
     assert result.exit_code == 0
+
+
+# -- git necromancy (Phase 3) ----------------------------------------------
+
+
+def test_chronicle_cli_formats(necropolis):
+    md = runner.invoke(app, ["--plain", "chronicle", str(necropolis)])
+    assert md.exit_code == 0
+    assert md.stdout.startswith("<!--\ngit-reaper chronicle")
+    assert "| sha |" in md.stdout
+
+    js = runner.invoke(app, ["--plain", "chronicle", str(necropolis), "--format", "json"])
+    data = json.loads(js.stdout)
+    assert data["provenance"]["schema"] == schemas.artifact_schema("chronicle")
+    assert len(data["commits"]) == 5
+
+    csv_out = runner.invoke(app, ["--plain", "chronicle", str(necropolis), "--format", "csv"])
+    assert csv_out.stdout.startswith("sha,date,author,")
+
+
+def test_chronicle_changelog_cli(necropolis):
+    result = runner.invoke(app, ["--plain", "chronicle", str(necropolis), "--changelog"])
+    assert result.exit_code == 0
+    assert "## v1.0.0" in result.stdout
+
+
+def test_souls_heatmap_cli(necropolis):
+    result = runner.invoke(app, ["--plain", "souls", str(necropolis), "--heatmap"])
+    assert result.exit_code == 0
+    assert "activity" in result.stdout
+    assert "Mon" in result.stdout
+
+
+def test_haunt_cli(necropolis):
+    result = runner.invoke(app, ["--plain", "haunt", str(necropolis), "--format", "json"])
+    data = json.loads(result.stdout)
+    assert data["hotspots"][0]["path"] == "src/core.py"
+
+
+def test_autopsy_cli(necropolis):
+    result = runner.invoke(
+        app, ["--plain", "autopsy", "docs/new.md", "-s", str(necropolis), "--format", "json"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert "docs/old.md" in data["former_names"]
+
+
+def test_autopsy_missing_arg_exits_1():
+    result = runner.invoke(app, ["--plain", "autopsy"])
+    assert result.exit_code == 1
+
+
+def test_graveyard_and_resurrect_cli(necropolis, tmp_path):
+    graves = runner.invoke(app, ["--plain", "graveyard", str(necropolis), "--format", "json"])
+    dead = {d["path"] for d in json.loads(graves.stdout)["dead"]}
+    assert "src/core.py" in dead
+
+    dst = tmp_path / "risen"
+    raised = runner.invoke(
+        app, ["--plain", "resurrect", "src/core.py", "-s", str(necropolis), "-o", str(dst)]
+    )
+    assert raised.exit_code == 0
+    assert (dst / "src/core.py").read_text() == "x = 1\ny = 2\n"
+
+
+def test_resurrect_unknown_exits_1(necropolis, tmp_path):
+    result = runner.invoke(
+        app, ["--plain", "resurrect", "no/such.py", "-s", str(necropolis), "-o", str(tmp_path)]
+    )
+    assert result.exit_code == 1
+
+
+def test_ghosts_cli(necropolis):
+    result = runner.invoke(
+        app, ["--plain", "ghosts", str(necropolis), "--than", "40d", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["threshold_days"] == 40
+    assert {b["name"] for b in data["branches"]} == {"main", "feature"}
+
+
+def test_rot_cli(necropolis):
+    result = runner.invoke(app, ["--plain", "rot", str(necropolis), "--format", "json"])
+    data = json.loads(result.stdout)
+    assert data["files"][0]["path"] == "README.md"
+
+
+def test_tombstone_cli(necropolis):
+    result = runner.invoke(app, ["--plain", "tombstone", str(necropolis)])
+    assert result.exit_code == 0
+    assert "R I P" in result.stdout
+    assert "kill core" in result.stdout
+
+
+def test_history_on_plain_folder_exits_1(make_dir):
+    folder = make_dir({"a.txt": "hi\n"})
+    result = runner.invoke(app, ["--plain", "chronicle", str(folder)])
+    assert result.exit_code == 1
+
+
+def test_history_writes_pure_artifact_to_out(necropolis, tmp_path):
+    out = tmp_path / "log.md"
+    result = runner.invoke(app, ["--plain", "chronicle", str(necropolis), "--out", str(out)])
+    assert result.exit_code == 0
+    assert result.stdout == ""  # narration went to stderr; artifact to the file
+    assert "git-reaper chronicle" in out.read_text()

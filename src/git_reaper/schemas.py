@@ -92,6 +92,15 @@ COMMAND_MODELS: dict[str, type] = {
     "grimoire": models.GrimoireResult,
     "pulse": models.PulseResult,
     "banish": models.BanishResult,
+    "chronicle": models.ChronicleResult,
+    "souls": models.SoulsResult,
+    "haunt": models.HauntResult,
+    "autopsy": models.AutopsyResult,
+    "graveyard": models.GraveyardResult,
+    "resurrect": models.ResurrectResult,
+    "ghosts": models.GhostsResult,
+    "rot": models.RotResult,
+    "tombstone": models.TombstoneResult,
 }
 
 #: Commands with no JSON output of their own (`cast` emits whatever the

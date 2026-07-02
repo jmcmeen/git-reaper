@@ -11,7 +11,15 @@ import subprocess
 from functools import cached_property
 from pathlib import Path
 
-from git_reaper.gitio.backend import GitBackend, GitError
+from git_reaper.gitio import logparse
+from git_reaper.gitio.backend import (
+    BranchRecord,
+    DeadFileRecord,
+    GitBackend,
+    GitCommit,
+    GitError,
+    TagRecord,
+)
 
 
 class SubprocessGit(GitBackend):
@@ -69,10 +77,23 @@ class SubprocessGit(GitBackend):
         args = ["fetch"]
         if depth:
             args += ["--depth", str(depth)]
+        elif self._is_shallow(repo):
+            # A full-depth fetch over a shallow clone must unshallow it, or the
+            # history commands would silently see only the tip commit.
+            args.append("--unshallow")
         args.append("origin")
         if ref:
             args.append(ref)
         self._run(args, cwd=repo)
+
+    def _is_shallow(self, repo: Path) -> bool:
+        proc = subprocess.run(
+            [self._require_git(), "rev-parse", "--is-shallow-repository"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode == 0 and proc.stdout.strip() == "true"
 
     def checkout(self, repo: Path, ref: str) -> None:
         # Try the local name first, then FETCH_HEAD for shallow single-ref fetches.
@@ -102,16 +123,7 @@ class SubprocessGit(GitBackend):
         )
         if proc.returncode != 0:
             return None
-        lines: list[tuple[str, int]] = []
-        author, when = "", 0
-        for raw in proc.stdout.split("\n"):
-            if raw.startswith("author "):
-                author = raw[7:]
-            elif raw.startswith("author-time "):
-                when = int(raw[12:])
-            elif raw.startswith("\t"):
-                lines.append((author, when))
-        return lines
+        return logparse.parse_blame(proc.stdout)
 
     def current_branch(self, repo: Path) -> str | None:
         proc = subprocess.run(
@@ -123,3 +135,50 @@ class SubprocessGit(GitBackend):
         if proc.returncode != 0:
             return None
         return proc.stdout.strip() or None
+
+    # -- history mining (Phase 3) ------------------------------------------
+    # Command shapes and parsing are shared (gitio.logparse); this backend
+    # only supplies the transport (subprocess).
+
+    def log(
+        self, repo: Path, ref: str | None = None, max_count: int | None = None
+    ) -> list[GitCommit]:
+        return logparse.parse_log(self._run(logparse.log_args(ref, max_count), cwd=repo))
+
+    def file_log(self, repo: Path, rel_path: str, follow: bool = True) -> list[GitCommit]:
+        return logparse.parse_log(self._run(logparse.file_log_args(rel_path, follow), cwd=repo))
+
+    def rename_history(self, repo: Path, rel_path: str) -> list[str]:
+        return logparse.parse_renames(self._run(logparse.rename_args(rel_path), cwd=repo), rel_path)
+
+    def deleted_files(self, repo: Path) -> list[DeadFileRecord]:
+        return logparse.parse_deleted(self._run(logparse.deleted_args(), cwd=repo))
+
+    def show_file(self, repo: Path, rev: str, rel_path: str) -> bytes | None:
+        proc = subprocess.run(
+            [self._require_git(), "show", f"{rev}:{rel_path}"],
+            cwd=repo,
+            capture_output=True,
+        )
+        if proc.returncode != 0:
+            return None
+        return proc.stdout
+
+    def branches(self, repo: Path) -> list[BranchRecord]:
+        out = self._run(logparse.branch_ref_args(), cwd=repo)
+        merged = self._merged_branches(repo)
+        return logparse.parse_branches(out, merged)
+
+    def _merged_branches(self, repo: Path) -> set[str]:
+        proc = subprocess.run(
+            [self._require_git(), "branch", "--merged"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            return set()
+        return logparse.parse_merged(proc.stdout)
+
+    def tags(self, repo: Path) -> list[TagRecord]:
+        return logparse.parse_tags(self._run(logparse.tag_ref_args(), cwd=repo))

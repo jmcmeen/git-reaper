@@ -37,6 +37,20 @@ jobs:
       - run: uv sync
       - run: uv run pytest
 
+  # The base matrix runs without extras, so the GitPython parity tests skip
+  # there. This job installs the [git] extra so that backend is exercised.
+  test-gitpython:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra git
+      - run: uv run --extra git pytest
+
   docs:
     runs-on: ubuntu-latest
     steps:

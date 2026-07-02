@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-02
+
+Git Necromancy. Mining commit history: who, what, when, and what has died.
+
+### Added
+
+#### Commands
+
+- `reaper chronicle` - extract commit history (SHA, author, date, message,
+  files touched, insertions/deletions) to markdown, JSON, or CSV.
+  `--changelog` groups commits under the tag that heads their release range.
+- `reaper souls` - contributor stats: commits, lines added/removed, first and
+  last seen, and a bus-factor estimate. `--heatmap` renders a day-of-week x
+  hour activity grid (bucketed by each commit's recorded timezone, so output
+  never depends on the machine) and flags the repo's "witching hour."
+- `reaper haunt` - code churn and hotspots: files ranked by change frequency
+  and churn, the classic bug-risk proxy.
+- `reaper autopsy <path>` - deep single-file examination: creation commit,
+  rename history (`--follow`, on by default), authors over time, churn
+  totals, and a blame-based line-age summary.
+- `reaper graveyard` - every file that ever lived and died: path, date of
+  death, the fatal commit, and its author. Renamed-away paths count as deaths.
+- `reaper resurrect <path>` - restore a dead file's last living bytes (read
+  from the parent of the commit that removed it) into the working tree or
+  `--out`. Absolute paths and `..` segments are refused, same as reanimate.
+- `reaper ghosts` - branch hygiene: branches ranked by abandonment, with
+  merged, gone-upstream, and (past `--than 90d`) stale flags.
+- `reaper rot` - staleness report: surviving files ranked by how long they
+  have gone untouched, ages derived from a single log pass.
+- `reaper tombstone` - a stats card for demos and READMEs (born, age,
+  commits, souls, last words, witching hour) as ASCII tombstone art, or JSON.
+
+#### Output and formats
+
+- CSV output (`--format csv`) for `chronicle`, `souls`, `haunt`, `graveyard`,
+  `ghosts`, and `rot`.
+
+#### Library and backends
+
+- The git backend gained the history surface: `log` (with per-file numstat
+  churn), `file_log`, `rename_history`, `deleted_files`, `show_file`,
+  `branches`, and `tags`. Commit records use control-char field separators so
+  multiline messages can never break the parse, and `--no-renames` keeps churn
+  attribution stable.
+- Optional GitPython backend behind the `git-reaper[git]` extra, selectable
+  with `GIT_REAPER_BACKEND=gitpython`. It shares command shapes and parsers
+  with the subprocess backend (`git_reaper.gitio.logparse`), so both return
+  byte-identical results.
+
+### Fixed
+
+- History commands run against a full clone: a full-depth fetch now
+  `--unshallow`s a previously shallow catacombs clone instead of silently
+  seeing only the tip commit.
+- Non-ASCII paths in history output are no longer C-quoted (`core.quotepath`
+  is disabled on log commands), so they read as UTF-8 literals.
+
 ## [0.2.0] - 2026-07-02
 
 Deeper Digging. The conjure/reanimate round trip, repo analysis, and the
@@ -114,6 +171,7 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jmcmeen/git-reaper/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jmcmeen/git-reaper/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jmcmeen/git-reaper/releases/tag/v0.1.0
