@@ -36,8 +36,14 @@ def _sanitize(part: str) -> str:
 def grave_path(url: str) -> Path:
     """Map a remote URL to its plot in the catacombs."""
     parsed = urlparse(url)
-    if parsed.scheme:
-        # file:// URLs have no netloc; file them under "localhost".
+    if parsed.scheme == "file":
+        # file:// URLs have no meaningful host; file them under "localhost".
+        # Tolerate Windows spellings (file://C:\repos\x): backslashes never
+        # delimit for urlparse, so the drive letter lands in netloc.
+        host, path = "localhost", parsed.path.replace("\\", "/")
+        if re.match(r"^[A-Za-z]:", parsed.netloc):
+            path = parsed.netloc.replace("\\", "/") + path
+    elif parsed.scheme:
         host, path = parsed.netloc or "localhost", parsed.path
     else:
         scp = _SCP_RE.match(url)

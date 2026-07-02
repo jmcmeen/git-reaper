@@ -19,6 +19,17 @@ def test_grave_path_layouts(isolated_catacombs: Path):
     assert ssh == isolated_catacombs / "github.com" / "jmcmeen" / "observa"
 
 
+def test_grave_path_file_urls(isolated_catacombs: Path):
+    posix = cache.grave_path("file:///tmp/crypt/corpse")
+    assert posix == isolated_catacombs / "localhost" / "tmp" / "crypt" / "corpse"
+    # Windows as_uri() form: drive letter rides in the path.
+    proper = cache.grave_path("file:///C:/repos/corpse")
+    assert proper == isolated_catacombs / "localhost" / "C_" / "repos" / "corpse"
+    # Hand-typed Windows form: backslashes push the drive into the netloc.
+    typed = cache.grave_path("file://C:\\repos\\corpse")
+    assert typed == proper
+
+
 def test_grave_path_rejects_nonsense():
     with pytest.raises(ValueError):
         cache.grave_path("https://github.com/")
@@ -27,7 +38,7 @@ def test_grave_path_rejects_nonsense():
 def test_remote_clone_lands_in_catacombs_and_is_reused(make_repo, isolated_catacombs: Path):
     # file:// URLs exercise the real clone path without any network.
     origin = make_repo({"README.md": "# origin\n"})
-    url = f"file://{origin}"
+    url = origin.as_uri()
 
     first = resolve_source(url)
     assert not first.cached
@@ -42,7 +53,7 @@ def test_remote_clone_lands_in_catacombs_and_is_reused(make_repo, isolated_catac
 
 def test_banish_clears_and_respects_age(make_repo, isolated_catacombs: Path):
     origin = make_repo({"README.md": "x\n"})
-    resolved = resolve_source(f"file://{origin}")
+    resolved = resolve_source(origin.as_uri())
 
     old = time.time() - 10 * 86400
     os.utime(resolved.repo.path, (old, old))
