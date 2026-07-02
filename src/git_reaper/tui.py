@@ -14,7 +14,7 @@ from pathlib import Path
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen, Screen
+from textual.screen import ModalScreen
 from textual.timer import Timer
 from textual.widgets import (
     Button,
@@ -63,16 +63,6 @@ class ScytheSpinner(Static):
         self.update(f"reaping {_SCYTHE[self._i]}")
 
 
-class SplashScreen(Screen[None]):
-    """The skull, dismissed by any key so tests (and users) can move on."""
-
-    def compose(self) -> ComposeResult:
-        yield Static(f"{art.HERO_SKULL}\n\n  press any key to begin", id="splash")
-
-    def on_key(self) -> None:
-        self.dismiss()
-
-
 class SaveScreen(ModalScreen[str | None]):
     """Ask where to write the artifact. Returns the path, or None on cancel."""
 
@@ -115,7 +105,6 @@ class ReaperApp(App[None]):
     #status { height: 1; color: $text-muted; padding: 0 1; }
     .heading { text-style: bold; padding: 1 1 0 1; }
     #reap { margin: 1 1; width: 100%; }
-    SplashScreen { align: center middle; }
     #dialog { padding: 1 2; width: 64; height: auto; border: round $primary; background: $surface; }
     """
     BINDINGS = [
@@ -151,7 +140,6 @@ class ReaperApp(App[None]):
 
     def on_mount(self) -> None:
         self._load_recipes()
-        self.push_screen(SplashScreen())
 
     def _load_recipes(self) -> None:
         try:

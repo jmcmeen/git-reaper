@@ -15,19 +15,15 @@ pytest.importorskip("textual")
 
 from textual.widgets import Input, OptionList, TextArea
 
-from git_reaper.tui import ReaperApp, SaveScreen, SplashScreen
+from git_reaper.tui import ReaperApp, SaveScreen
 from git_reaper.tui_ops import OPERATIONS, OPERATIONS_BY_KEY
 
 
-def test_boots_and_splash_dismisses(necropolis):
+def test_boots_with_the_ritual_list(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause()
-            assert isinstance(app.screen, SplashScreen)
-            await pilot.press("enter")
-            await pilot.pause()
-            assert not isinstance(app.screen, SplashScreen)
             assert app.query_one("#operations", OptionList).option_count == len(OPERATIONS)
 
     asyncio.run(scenario())
@@ -37,7 +33,6 @@ def test_reap_populates_preview(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
         async with app.run_test(size=(100, 40)) as pilot:
-            await pilot.press("enter")  # dismiss splash
             await pilot.pause()
             app.action_reap()  # default ritual is 'tree'
             await app.workers.wait_for_complete()
@@ -52,7 +47,6 @@ def test_selecting_a_history_ritual_then_reaping(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
         async with app.run_test(size=(100, 40)) as pilot:
-            await pilot.press("enter")
             await pilot.pause()
             ops = app.query_one("#operations", OptionList)
             ops.focus()
@@ -74,7 +68,6 @@ def test_save_writes_the_previewed_artifact(necropolis, tmp_path):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))
         async with app.run_test(size=(100, 40)) as pilot:
-            await pilot.press("enter")
             await pilot.pause()
             app.action_reap()
             await app.workers.wait_for_complete()
@@ -97,7 +90,6 @@ def test_bad_source_reports_failure_without_crashing():
     async def scenario() -> None:
         app = ReaperApp(source="/no/such/crypt")
         async with app.run_test(size=(100, 40)) as pilot:
-            await pilot.press("enter")
             await pilot.pause()
             app.action_reap()
             await app.workers.wait_for_complete()
@@ -120,7 +112,6 @@ def test_recipe_prefills_source_and_ritual(necropolis, tmp_path, monkeypatch):
     async def scenario() -> None:
         app = ReaperApp(source=".")
         async with app.run_test(size=(100, 40)) as pilot:
-            await pilot.press("enter")
             await pilot.pause()
             recipes = app.query_one("#recipes", OptionList)
             assert recipes.option_count == 1
