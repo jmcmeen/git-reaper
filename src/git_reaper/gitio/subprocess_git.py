@@ -8,17 +8,26 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from functools import cached_property
 from pathlib import Path
 
 from git_reaper.gitio.backend import GitBackend, GitError
 
 
 class SubprocessGit(GitBackend):
-    def _run(self, args: list[str], cwd: Path | None = None, check: bool = True) -> str:
-        if shutil.which("git") is None:
+    @cached_property
+    def _git(self) -> str | None:
+        """Resolved git executable, looked up once per backend instance."""
+        return shutil.which("git")
+
+    def _require_git(self) -> str:
+        if self._git is None:
             raise GitError("git is not on PATH; install git or run `reaper pulse` for details")
+        return self._git
+
+    def _run(self, args: list[str], cwd: Path | None = None, check: bool = True) -> str:
         proc = subprocess.run(
-            ["git", *args],
+            [self._require_git(), *args],
             cwd=cwd,
             capture_output=True,
             text=True,
@@ -31,15 +40,15 @@ class SubprocessGit(GitBackend):
         return proc.stdout
 
     def version(self) -> str | None:
-        if shutil.which("git") is None:
+        if self._git is None:
             return None
         return self._run(["--version"]).strip()
 
     def is_repo(self, path: Path) -> bool:
-        if shutil.which("git") is None or not path.is_dir():
+        if self._git is None or not path.is_dir():
             return False
         proc = subprocess.run(
-            ["git", "rev-parse", "--is-inside-work-tree"],
+            [self._git, "rev-parse", "--is-inside-work-tree"],
             cwd=path,
             capture_output=True,
             text=True,
@@ -67,13 +76,15 @@ class SubprocessGit(GitBackend):
 
     def checkout(self, repo: Path, ref: str) -> None:
         # Try the local name first, then FETCH_HEAD for shallow single-ref fetches.
-        proc = subprocess.run(["git", "checkout", ref], cwd=repo, capture_output=True, text=True)
+        proc = subprocess.run(
+            [self._require_git(), "checkout", ref], cwd=repo, capture_output=True, text=True
+        )
         if proc.returncode != 0:
             self._run(["checkout", "FETCH_HEAD"], cwd=repo)
 
     def head_sha(self, repo: Path) -> str | None:
         proc = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True
+            [self._require_git(), "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True
         )
         if proc.returncode != 0:
             return None
@@ -81,7 +92,7 @@ class SubprocessGit(GitBackend):
 
     def current_branch(self, repo: Path) -> str | None:
         proc = subprocess.run(
-            ["git", "symbolic-ref", "--short", "HEAD"],
+            [self._require_git(), "symbolic-ref", "--short", "HEAD"],
             cwd=repo,
             capture_output=True,
             text=True,

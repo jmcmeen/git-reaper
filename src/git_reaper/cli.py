@@ -77,6 +77,11 @@ def _print_schema(command: str) -> None:
     sys.stdout.write(json.dumps(schema, indent=2) + "\n")
 
 
+def _validate_format(fmt: str) -> None:
+    if fmt not in ("md", "json"):
+        raise _die(f"unknown format {fmt!r}", "use --format md or --format json")
+
+
 def _version_callback(value: bool) -> None:
     if value:
         sys.stdout.write(f"git-reaper {__version__}\n")
@@ -231,8 +236,7 @@ def tree_cmd(
     if schema:
         _print_schema("tree")
         return
-    if fmt not in ("md", "json"):
-        raise _die(f"unknown format {fmt!r}", "use --format md or --format json")
+    _validate_format(fmt)
     _banner()
     try:
         resolved = resolve_source(source, ref=ref)
@@ -269,6 +273,7 @@ def pulse_cmd(
     if schema:
         _print_schema("pulse")
         return
+    _validate_format(fmt)
     result = pulse_core.pulse()
     if fmt == "json":
         _emit(jsonfmt.render(result), None)

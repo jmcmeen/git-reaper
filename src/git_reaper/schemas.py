@@ -79,10 +79,19 @@ def schema_for(cls: type) -> dict[str, Any]:
     return schema
 
 
-#: Command name -> the model its JSON output serializes.
+#: Command name -> the model its JSON output serializes. The single registry:
+#: `--schema` output, provenance schema strings, and the CLI-sync test all
+#: derive from this mapping.
 COMMAND_MODELS: dict[str, type] = {
     "harvest": models.HarvestResult,
     "tree": models.TreeResult,
     "pulse": models.PulseResult,
     "banish": models.BanishResult,
 }
+
+
+def artifact_schema(command: str) -> str:
+    """The provenance schema string for a command's artifacts, e.g. 'harvest/v1'."""
+    if command not in COMMAND_MODELS:
+        raise KeyError(f"no schema registered for command {command!r}")
+    return f"{command}/{SCHEMA_VERSION}"

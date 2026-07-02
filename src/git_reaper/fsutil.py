@@ -32,6 +32,9 @@ def parse_size(text: str) -> int:
     unit = unit.upper()
     if unit in ("K", "M", "G", "T"):
         unit += "B"
+    if unit not in _SIZE_UNITS:
+        # The regex is looser than the unit table ('1Ki' slips through).
+        raise ValueError(f"unreadable size: {text!r} (try '1MB', '512KiB', or plain bytes)")
     return int(float(value) * _SIZE_UNITS[unit])
 
 

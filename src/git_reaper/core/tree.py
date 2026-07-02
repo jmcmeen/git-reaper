@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from git_reaper import fsutil
+from git_reaper import fsutil, schemas
 from git_reaper.core.provenance import make_provenance
 from git_reaper.ignore import IgnoreMatcher
 from git_reaper.models import RepoRef, TreeNode, TreeResult
@@ -24,7 +24,7 @@ def tree(
     root_path = Path(repo.path)
     matcher = IgnoreMatcher(root_path, extra_excludes=excludes)
     result = TreeResult(
-        provenance=make_provenance("tree/v1", repo, invoked, generated),
+        provenance=make_provenance(schemas.artifact_schema("tree"), repo, invoked, generated),
         root=TreeNode(name=root_path.name or str(root_path), path=".", is_dir=True),
     )
 

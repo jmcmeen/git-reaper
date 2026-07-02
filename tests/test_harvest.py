@@ -6,6 +6,7 @@ import io
 
 import pytest
 
+from git_reaper import schemas
 from git_reaper.core.harvest import CapExceeded, harvest
 from git_reaper.core.source import resolve_source
 from git_reaper.formatters.markdown import write_harvest
@@ -88,7 +89,7 @@ def test_artifact_is_deterministic_and_delimited(make_repo):
     first = _render(harvest(repo, **kwargs))
     second = _render(harvest(repo, **kwargs))
     assert first == second
-    assert "schema:    harvest/v1" in first
+    assert f"schema:    {schemas.artifact_schema('harvest')}" in first
     assert "## docs/guide.md" in first
     assert "<!-- end docs/guide.md -->" in first
     # tree order is sorted -> README before docs

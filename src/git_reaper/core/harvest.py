@@ -6,7 +6,7 @@ from __future__ import annotations
 import fnmatch
 from pathlib import Path
 
-from git_reaper import fsutil
+from git_reaper import fsutil, schemas
 from git_reaper.core.provenance import make_provenance
 from git_reaper.ignore import IgnoreMatcher, walk_files
 from git_reaper.models import FileEntry, HarvestResult, RepoRef
@@ -41,7 +41,7 @@ def harvest(
     root = Path(repo.path)
     matcher = IgnoreMatcher(root, extra_excludes=excludes)
     result = HarvestResult(
-        provenance=make_provenance("harvest/v1", repo, invoked, generated),
+        provenance=make_provenance(schemas.artifact_schema("harvest"), repo, invoked, generated),
         root=str(root),
     )
 

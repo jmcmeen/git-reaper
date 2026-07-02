@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from git_reaper import schemas
 from git_reaper.core.source import resolve_source
 from git_reaper.core.tree import tree
 from git_reaper.formatters import jsonfmt
@@ -56,5 +57,5 @@ def test_tree_json_round_trips(make_dir):
 
     result = tree(resolve_source(str(make_dir(FILES))).repo, generated="2026-07-01T00:00:00Z")
     data = json.loads(jsonfmt.render(result))
-    assert data["provenance"]["schema"] == "tree/v1"
+    assert data["provenance"]["schema"] == schemas.artifact_schema("tree")
     assert data["root"]["is_dir"] is True

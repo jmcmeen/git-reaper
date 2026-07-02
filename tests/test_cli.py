@@ -6,7 +6,7 @@ import json
 
 from typer.testing import CliRunner
 
-from git_reaper import __version__
+from git_reaper import __version__, schemas
 from git_reaper.cli import app
 
 runner = CliRunner()
@@ -66,21 +66,32 @@ def test_tree_md_and_json(make_repo):
 
     js = runner.invoke(app, ["--plain", "tree", str(root), "--format", "json"])
     data = json.loads(js.stdout)
-    assert data["provenance"]["schema"] == "tree/v1"
+    assert data["provenance"]["schema"] == schemas.artifact_schema("tree")
 
 
-def test_tree_bad_format_exits_1(make_repo):
+def test_bad_format_exits_1(make_repo):
     root = make_repo(FILES)
-    result = runner.invoke(app, ["--plain", "tree", str(root), "--format", "yaml"])
-    assert result.exit_code == 1
+    tree = runner.invoke(app, ["--plain", "tree", str(root), "--format", "yaml"])
+    assert tree.exit_code == 1
+    pulse = runner.invoke(app, ["--plain", "pulse", "--format", "yaml"])
+    assert pulse.exit_code == 1
 
 
-def test_schema_flags_print_json():
-    for command in ("harvest", "tree", "pulse", "banish"):
+def test_every_visible_command_publishes_a_schema():
+    # COMMAND_MODELS is the single registry; a new or renamed command must
+    # register there, and every registered command must answer --schema.
+    visible = {cmd.name for cmd in app.registered_commands if not cmd.hidden}
+    assert visible == set(schemas.COMMAND_MODELS)
+    for command in sorted(visible):
         result = runner.invoke(app, ["--plain", command, "--schema"])
         assert result.exit_code == 0, command
         schema = json.loads(result.stdout)
         assert schema["type"] == "object"
+
+
+def test_boo_is_wired():
+    result = runner.invoke(app, ["boo"])
+    assert result.exit_code == 0
 
 
 def test_pulse_runs():
