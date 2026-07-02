@@ -57,6 +57,43 @@ def test_reap_populates_preview(necropolis):
     asyncio.run(scenario())
 
 
+def test_arrow_keys_select_without_enter(necropolis):
+    async def scenario() -> None:
+        app = ReaperApp(source=str(necropolis))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            ops = app.query_one("#operations", OptionList)
+            ops.focus()
+            app.set_operation("limbs")  # start on the first ritual
+            await pilot.pause()
+            await pilot.press("down")  # move highlight one ritual down; no enter
+            await pilot.pause()
+            assert app.current_op.key == "harvest"  # the next ritual, selected on highlight
+            # the top ritual-name area tracks the highlight
+            assert app.current_op.label in str(app.query_one("#ritual-name").render())
+
+    asyncio.run(scenario())
+
+
+def test_ritual_name_and_status_are_separate_areas(necropolis):
+    async def scenario() -> None:
+        app = ReaperApp(source=str(necropolis))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            app.set_operation("souls")
+            await pilot.pause()
+            name = str(app.query_one("#ritual-name").render())
+            assert "souls" in name  # the ritual name sits up top
+            app.action_reap()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            # the bottom status carries the run summary; the top still names the ritual
+            assert "reaped souls" in str(app.query_one("#status").render())
+            assert "souls" in str(app.query_one("#ritual-name").render())
+
+    asyncio.run(scenario())
+
+
 def test_options_panel_rebuilds_on_ritual_change(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))

@@ -20,6 +20,7 @@ from typing import Any
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.theme import Theme
 from textual.timer import Timer
@@ -208,6 +209,7 @@ class ReaperApp(App[None]):
     #operations { height: 1fr; }
     #recipes { height: 8; }
     #main { height: 1fr; }
+    #ritual-name { height: 1; color: $primary; text-style: bold; padding: 0 1; }
     #options { height: auto; max-height: 12; border: round $primary; margin: 0 1; padding: 0 1; }
     .opt-row { height: 3; }
     .opt-row Label { width: 26; padding: 1 0 0 0; }
@@ -261,13 +263,14 @@ class ReaperApp(App[None]):
                 yield OptionList(id="recipes")
                 yield Button("Reap (r)", id="reap", variant="primary")
             with Vertical(id="main"):
+                yield Label(self.current_op.label, id="ritual-name")
                 yield VerticalScroll(id="options")
                 yield ScytheSpinner("", id="spinner")
+                yield TextArea("", id="preview", read_only=True)
+                yield Markdown("", id="rendered")
                 with Horizontal(id="statusbar"):
                     yield Label(f"git-reaper {__version__} - pick a ritual and reap", id="status")
                     yield Static("", id="badge")
-                yield TextArea("", id="preview", read_only=True)
-                yield Markdown("", id="rendered")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -360,23 +363,37 @@ class ReaperApp(App[None]):
 
     # -- selection ---------------------------------------------------------
 
-    def set_operation(self, key: str) -> None:
-        """Select a ritual by key, rebuild its options, and highlight it."""
-        op = OPERATIONS_BY_KEY[key]
+    def _apply_operation(self, op: Operation) -> None:
+        """Make `op` the current ritual and rebuild its options panel. Does not
+        move the list highlight (the caller may already be on it)."""
+        if op is self.current_op:
+            return
         self.current_op = op
         self._build_options()
-        self._status(f"ritual: {op.key}")
+        self.query_one("#ritual-name", Label).update(op.label)
+
+    def set_operation(self, key: str) -> None:
+        """Select a ritual by key, rebuild its options, and move the highlight
+        onto it (which itself applies it, via the highlight handler)."""
         ops = self.query_one("#operations", OptionList)
         for index in range(ops.option_count):
             if ops.get_option_at_index(index).id == key:
                 ops.highlighted = index
                 break
+        self._apply_operation(OPERATIONS_BY_KEY[key])
+
+    @on(OptionList.OptionHighlighted, "#operations")
+    def _op_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+        # Arrow keys move the highlight; that alone selects the ritual -- no
+        # Enter required. Group headers carry no id and are skipped.
+        if event.option is not None and event.option.id is not None:
+            self._apply_operation(OPERATIONS_BY_KEY[event.option.id])
 
     @on(OptionList.OptionSelected, "#operations")
     def _op_selected(self, event: OptionList.OptionSelected) -> None:
         key = event.option.id
         if key is not None:
-            self.set_operation(key)
+            self._apply_operation(OPERATIONS_BY_KEY[key])
 
     @on(OptionList.OptionSelected, "#recipes")
     def _recipe_selected(self, event: OptionList.OptionSelected) -> None:
@@ -430,7 +447,10 @@ class ReaperApp(App[None]):
 
     def _inspect_source(self, source: str) -> None:
         source = source.strip()
-        hint = self.query_one("#source-hint", Label)
+        try:
+            hint = self.query_one("#source-hint", Label)
+        except NoMatches:  # a modal is up, or the app is tearing down
+            return
         if not source or "://" in source or "@" in source:
             hint.update("remote source - will clone into the catacombs on reap" if source else "")
             self._apply_git_state(True)
@@ -448,12 +468,22 @@ class ReaperApp(App[None]):
         self.call_from_thread(self._show_source_state, note, is_repo)
 
     def _show_source_state(self, note: str, is_repo: bool) -> None:
-        self.query_one("#source-hint", Label).update(note)
+        # a thread callback can land after a modal opens or the app stops;
+        # if the base screen's widgets are gone, quietly skip.
+        try:
+            self.query_one("#source-hint", Label).update(note)
+        except NoMatches:
+            return
         self._apply_git_state(is_repo)
 
     def _apply_git_state(self, is_repo: bool) -> None:
-        """Gray out git-only rituals when the source is not a repo."""
-        ops = self.query_one("#operations", OptionList)
+        """Gray out git-only rituals when the source is not a repo. Preserves
+        the current highlight, so graying never changes the selected ritual."""
+        try:
+            ops = self.query_one("#operations", OptionList)
+        except NoMatches:
+            return
+        keep = ops.highlighted
         for op in OPERATIONS:
             if not op.needs_git:
                 continue
@@ -464,6 +494,8 @@ class ReaperApp(App[None]):
                     ops.disable_option(op.key)
             except Exception:  # older Textual without per-option enable/disable
                 return
+        if keep is not None and ops.highlighted != keep:
+            ops.highlighted = keep
 
     # -- actions -----------------------------------------------------------
 

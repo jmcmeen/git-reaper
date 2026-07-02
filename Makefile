@@ -1,16 +1,21 @@
 # git-reaper dev rituals. Everything runs through uv.
 
 UV ?= uv
+VENV ?= .venv
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup fmt lint typecheck test cov check build clean run pulse docs docs-build
+.PHONY: help setup activate fmt lint typecheck test cov check build clean run pulse docs docs-build
 
 help: ## List the available rituals
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[35m%-12s\033[0m %s\n", $$1, $$2}'
 
 setup: ## Create the venv and install all deps (incl. dev group)
 	$(UV) sync
+
+activate: ## Print the venv activation command (run: eval "$(make activate)")
+	@test -f $(VENV)/bin/activate || { echo 'no venv yet; run `make setup` first' >&2; exit 1; }
+	@echo 'source $(VENV)/bin/activate'
 
 fmt: ## Auto-format and fix lint findings
 	$(UV) run ruff format src tests
