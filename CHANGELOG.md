@@ -35,7 +35,9 @@ library-first core.
   returns typed result models; the CLI is a thin presentation layer.
 - The catacombs: remote clones cache under
   `~/.cache/git-reaper/catacombs/<host>/<owner>/<repo>`, shallow by default
-  and reused across runs.
+  and reused across runs. Local `file://` sources are buried flat as
+  `localhost/<name>-<digest>` so deep source paths stay inside Windows
+  path limits.
 - Provenance by default: every artifact opens with source, ref and SHA,
   timestamp, tool version, and the exact invocation used to produce it.
 - Deterministic output: same repo state plus same flags yields a

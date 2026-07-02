@@ -46,7 +46,8 @@ reaper banish --older-than 7d
   never silently.
 - **The catacombs.** Remote clones cache under
   `~/.cache/git-reaper/catacombs/<host>/<owner>/<repo>`, shallow, reused
-  across runs.
+  across runs. Local `file://` sources are buried flat
+  (`localhost/<name>-<digest>`) to stay inside Windows path limits.
 - **Published schemas.** Every JSON-emitting command prints its JSON schema
   with `--schema`.
 - **`--plain` / `NO_COLOR`** produce clean ASCII; non-tty output auto-disables

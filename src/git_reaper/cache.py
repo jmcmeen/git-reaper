@@ -2,7 +2,9 @@
 
 Remote clones land in a content-addressed cache under
 ``~/.cache/git-reaper/catacombs/<host>/<owner>/<repo>``, shallow by default,
-reused across runs, and cleared by ``banish``.
+reused across runs, and cleared by ``banish``. Local ``file://`` sources are
+buried flat as ``localhost/<name>-<digest>`` to stay inside Windows path
+limits.
 """
 
 from __future__ import annotations

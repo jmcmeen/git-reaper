@@ -60,6 +60,10 @@ Remote clones land in a content-addressed cache:
 ~/.cache/git-reaper/catacombs/<host>/<owner>/<repo>
 ```
 
+Local `file://` sources are buried flat as `localhost/<name>-<digest>`:
+mirroring a deep source path under the catacombs would breach Windows'
+260-char path limit.
+
 Shallow by default (`--depth 1`), reused across runs, cleared by `banish`.
 Override the location with the `GIT_REAPER_CACHE` environment variable.
 
