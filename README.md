@@ -16,21 +16,39 @@ uv tool install git-reaper   # or: pip install git-reaper
 Both `reaper` and `git-reaper` land on your PATH (the long form is the
 fallback if the REAPER DAW already owns the short one).
 
-## Commands (v0.1.0)
+## Commands
 
 | Command | What it does |
 | --- | --- |
 | `harvest` | Gather files matching a pattern (default `*.md`) from a path or repo URL and concatenate them into one artifact with a provenance header and per-file dividers. |
 | `tree` | Hierarchical file listing as markdown or JSON. Depth limits, dirs-only, sizes, line counts, ignore rules. |
+| `conjure` | Bundle a repo into a single LLM-ingestible file: tree first, then every text file inlined with spec'd delimiters. `--sha256` for verifiable hashes, `--split-tokens N` to shard into context-window-sized parts. |
+| `reanimate` | The inverse of `conjure`: reconstruct a directory tree from a packed artifact. `--verify` checks per-file hashes; path traversal is refused outright. |
+| `census` | File-type census: counts, sizes, line counts, language breakdown, token estimate. Size a repo before packing it. |
+| `unfinished` | Scan for TODO / FIXME / HACK / XXX markers, with authors via git blame and `--age` for how long each has haunted. |
+| `grimoire` | Show effective configuration, where each value came from, and stored recipes. |
+| `cast` | Run a saved recipe from the grimoire instead of retyping nine flags. |
 | `pulse` | Signs-of-life check: git present, optional extras, cache health. |
 | `banish` | Clear the catacombs (the clone cache). `--older-than 7d` for partial exorcisms. |
 
 ```sh
 reaper harvest https://github.com/Textualize/rich --pattern "*.md" -o RICH.md
-reaper tree . --sizes --lines
+reaper conjure . --sha256 --split-tokens 100000 -o PACKED.md
+reaper reanimate PACKED.md --out risen/ --verify
+reaper census . --format csv | head
+reaper unfinished . --age
+reaper cast nightly-pack
 reaper tree . --format json | jq .file_count
-reaper pulse
 reaper banish --older-than 7d
+```
+
+Recipes live in `.reaperrc` (or `[tool.reaper]` in pyproject.toml):
+
+```toml
+[recipes.nightly-pack]
+command = "conjure"
+args = [".", "--sha256", "--split-tokens", "100000", "--out", "PACKED.md"]
+description = "the whole crypt, sharded for the model"
 ```
 
 ## Behavior you can rely on

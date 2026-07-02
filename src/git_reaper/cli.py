@@ -19,12 +19,16 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from git_reaper import __version__, art, cache, fsutil, schemas
+from git_reaper import __version__, art, cache, config, fsutil, schemas
+from git_reaper.core import census as census_core
 from git_reaper.core import harvest as harvest_core
+from git_reaper.core import pack as pack_core
 from git_reaper.core import pulse as pulse_core
+from git_reaper.core import scan as scan_core
 from git_reaper.core import tree as tree_core
-from git_reaper.core.source import resolve_source
-from git_reaper.formatters import jsonfmt, markdown
+from git_reaper.core import unpack as unpack_core
+from git_reaper.core.source import ResolvedSource, resolve_source
+from git_reaper.formatters import csvfmt, jsonfmt, markdown
 from git_reaper.gitio import GitError
 from git_reaper.theme import make_console, theme_enabled
 
@@ -77,9 +81,20 @@ def _print_schema(command: str) -> None:
     sys.stdout.write(json.dumps(schema, indent=2) + "\n")
 
 
-def _validate_format(fmt: str) -> None:
-    if fmt not in ("md", "json"):
-        raise _die(f"unknown format {fmt!r}", "use --format md or --format json")
+def _validate_format(fmt: str, allowed: tuple[str, ...] = ("md", "json")) -> None:
+    if fmt not in allowed:
+        choices = " or ".join(f"--format {a}" for a in allowed)
+        raise _die(f"unknown format {fmt!r}", f"use {choices}")
+
+
+def _resolve(source: str, ref: str | None = None, depth: int | None = 1) -> ResolvedSource:
+    try:
+        resolved = resolve_source(source, ref=ref, depth=depth)
+    except (FileNotFoundError, ValueError, GitError) as exc:
+        raise _die(str(exc), "check the path or URL; `reaper pulse` checks your setup") from exc
+    if resolved.cached:
+        _say("necro", f"catacombs hit: {resolved.repo.source} already interred, reusing")
+    return resolved
 
 
 def _version_callback(value: bool) -> None:
@@ -135,13 +150,7 @@ def _harvest_impl(
     except ValueError as exc:
         raise _die(str(exc)) from exc
 
-    try:
-        resolved = resolve_source(source, ref=ref, depth=depth)
-    except (FileNotFoundError, ValueError, GitError) as exc:
-        raise _die(str(exc), "check the path or URL; `reaper pulse` checks your setup") from exc
-    if resolved.cached:
-        _say("necro", f"catacombs hit: {resolved.repo.source} already interred, reusing")
-
+    resolved = _resolve(source, ref=ref, depth=depth)
     patterns = tuple(pattern) if pattern else harvest_core.DEFAULT_PATTERNS
     try:
         result = harvest_core.harvest(
@@ -238,11 +247,7 @@ def tree_cmd(
         return
     _validate_format(fmt)
     _banner()
-    try:
-        resolved = resolve_source(source, ref=ref)
-    except (FileNotFoundError, ValueError, GitError) as exc:
-        raise _die(str(exc), "check the path or URL; `reaper pulse` checks your setup") from exc
-
+    resolved = _resolve(source, ref=ref)
     result = tree_core.tree(
         resolved.repo,
         max_depth=depth,
@@ -257,6 +262,252 @@ def tree_cmd(
         _emit(jsonfmt.render(result), out)
     else:
         _emit(markdown.render_tree(result, with_sizes=sizes, with_lines=lines), out)
+
+
+# --------------------------------------------------------------------------
+# conjure / reanimate (the round trip)
+# --------------------------------------------------------------------------
+
+
+def _part_path(out: Path, number: int) -> Path:
+    return out.with_name(f"{out.stem}.part{number:02d}{out.suffix}")
+
+
+@app.command("conjure")
+def conjure_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha (remote sources)."),
+    depth: int = typer.Option(1, "--depth", help="Clone depth for remote sources."),
+    max_file_size: str | None = typer.Option(
+        None, "--max-file-size", help="Skip files larger than this (e.g. 1MB)."
+    ),
+    max_total_size: str | None = typer.Option(
+        None, "--max-total-size", help="Abort past this total (e.g. 100MB)."
+    ),
+    sha256: bool = typer.Option(
+        False, "--sha256", help="Record per-file hashes (enables reanimate --verify)."
+    ),
+    split_tokens: int | None = typer.Option(
+        None, "--split-tokens", help="Shard into parts of at most this many tokens."
+    ),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Bundle a repo into a single LLM-ingestible artifact."""
+    if schema:
+        _print_schema("conjure")
+        return
+    _banner()
+    try:
+        file_cap = fsutil.parse_size(max_file_size) if max_file_size else None
+        total_cap = fsutil.parse_size(max_total_size) if max_total_size else None
+    except ValueError as exc:
+        raise _die(str(exc)) from exc
+    resolved = _resolve(source, ref=ref, depth=depth)
+    try:
+        result = pack_core.conjure(
+            resolved.repo,
+            excludes=exclude,
+            max_file_size=file_cap,
+            max_total_size=total_cap,
+            with_sha256=sha256,
+            split_tokens=split_tokens,
+            invoked=_invocation(),
+        )
+    except harvest_core.CapExceeded as exc:
+        raise _die(str(exc)) from exc
+
+    _say(
+        "necro",
+        f"conjured {len(result.files)} souls ... ~{result.token_estimate:,} tokens"
+        + (f" in {result.parts} parts" if result.parts > 1 else ""),
+    )
+    for skipped in result.skipped:
+        _say("ember", f"skipped {skipped.path}: {skipped.skip_reason}")
+
+    for number, text in pack_core.iter_parts(result):
+        if out is None:
+            sys.stdout.write(text)
+        else:
+            target = _part_path(out, number) if result.parts > 1 else out
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+            _say("bone", f"wrote {target}")
+    _say("ash", "the conjuring is complete.")
+
+
+@app.command("reanimate")
+def reanimate_cmd(
+    artifacts: list[Path] = typer.Argument(None, help="Conjured artifact file(s), parts welcome."),
+    out: Path = typer.Option(
+        Path("."), "--out", "-o", help="Directory to raise the tree in (must be empty)."
+    ),
+    force: bool = typer.Option(False, "--force", help="Write into a non-empty directory."),
+    verify: bool = typer.Option(False, "--verify", help="Check per-file sha256 meta."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Reconstruct a directory tree from a conjured artifact."""
+    if schema:
+        _print_schema("reanimate")
+        return
+    if not artifacts:
+        raise _die("no artifact given", "pass one or more conjured artifact files")
+    _banner()
+    texts = []
+    for artifact in artifacts:
+        if not artifact.is_file():
+            raise _die(f"no such artifact: {artifact}")
+        with artifact.open("r", encoding="utf-8", newline="") as fh:
+            texts.append(fh.read())
+    try:
+        result = unpack_core.reanimate("\n".join(texts), out, force=force, verify=verify)
+    except unpack_core.ReanimateError as exc:
+        raise _die(str(exc)) from exc
+
+    _say("necro", f"reanimated {len(result.files)} souls into {result.out}")
+    if verify:
+        for path in result.verify_failures:
+            _say("blood", f"hash mismatch: {path}")
+        if result.verify_failures:
+            raise _die(f"{len(result.verify_failures)} corpses failed verification")
+        checked = sum(1 for f in result.files if f.verified)
+        _say("necro", f"verified {checked} of {len(result.files)} hashes")
+    _say("ash", "what was written is risen.")
+
+
+# --------------------------------------------------------------------------
+# census / unfinished (analysis)
+# --------------------------------------------------------------------------
+
+
+@app.command("census")
+def census_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha (remote sources)."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """File-type census: counts, sizes, lines, languages, token estimate."""
+    if schema:
+        _print_schema("census")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    resolved = _resolve(source, ref=ref)
+    result = census_core.census(resolved.repo, excludes=exclude, invoked=_invocation())
+    _say("necro", f"counted {result.total_files} souls across {len(result.extensions)} kinds")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_census(result), out)
+    else:
+        _emit(markdown.render_census(result), out)
+
+
+@app.command("unfinished")
+def unfinished_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    age: bool = typer.Option(False, "--age", help="Add how long each marker has haunted."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, json, or csv."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha (remote sources)."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Scan for TODO / FIXME / HACK / XXX markers."""
+    if schema:
+        _print_schema("unfinished")
+        return
+    _validate_format(fmt, ("md", "json", "csv"))
+    _banner()
+    resolved = _resolve(source, ref=ref)
+    result = scan_core.unfinished(
+        resolved.repo, excludes=exclude, with_age=age, invoked=_invocation()
+    )
+    _say("necro", f"found {len(result.markers)} unfinished things")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    elif fmt == "csv":
+        _emit(csvfmt.render_unfinished(result), out)
+    else:
+        _emit(markdown.render_unfinished(result), out)
+
+
+# --------------------------------------------------------------------------
+# grimoire / cast (config and recipes)
+# --------------------------------------------------------------------------
+
+
+@app.command("grimoire")
+def grimoire_cmd(
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Show effective configuration, where it came from, and stored recipes."""
+    if schema:
+        _print_schema("grimoire")
+        return
+    _validate_format(fmt)
+    try:
+        result = config.load_grimoire()
+    except config.GrimoireError as exc:
+        raise _die(str(exc)) from exc
+    if fmt == "json":
+        _emit(jsonfmt.render(result), None)
+        return
+    table = Table(title="the grimoire", title_style="eldritch", border_style="grave")
+    table.add_column("setting", style="bone")
+    table.add_column("value", style="ash")
+    table.add_column("from", style="ash")
+    for value in result.settings:
+        table.add_row(value.key, escape(value.value), value.source)
+    state.console.print(table)
+    if result.recipes:
+        recipes = Table(title="recipes", title_style="eldritch", border_style="grave")
+        recipes.add_column("name", style="bone")
+        recipes.add_column("incantation", style="ash")
+        recipes.add_column("from", style="ash")
+        for recipe in result.recipes:
+            incantation = " ".join([recipe.command, *recipe.args])
+            recipes.add_row(recipe.name, escape(incantation), recipe.source)
+        state.console.print(recipes)
+    else:
+        _say("ash", "no recipes inscribed; add [recipes.<name>] to .reaperrc")
+
+
+@app.command(
+    "cast",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+def cast_cmd(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Recipe name from the grimoire."),
+) -> None:
+    """Run a saved recipe; extra arguments are passed through as overrides."""
+    try:
+        recipe = config.find_recipe(name)
+    except config.GrimoireError as exc:
+        raise _die(str(exc)) from exc
+    if recipe is None:
+        raise _die(f"no recipe named {name!r}", "`reaper grimoire` lists what is inscribed")
+    if recipe.command == "cast":
+        raise _die("a recipe cannot cast cast; the recursion would never rest")
+    argv = (["--plain"] if state.plain else []) + [recipe.command, *recipe.args, *ctx.args]
+    _say("necro", f"casting {name}: reaper {' '.join(argv)}")
+    command = typer.main.get_command(app)
+    try:
+        # standalone mode prints usage errors itself and always leaves via
+        # SystemExit (0 on success); translate the code, never swallow it.
+        command.main(args=argv, prog_name="reaper")
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 1
+        if code:
+            _say("blood", f"recipe {name!r} failed (exit {code})")
+            raise typer.Exit(code=code) from exc
 
 
 # --------------------------------------------------------------------------

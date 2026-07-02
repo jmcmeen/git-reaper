@@ -90,6 +90,29 @@ class SubprocessGit(GitBackend):
             return None
         return proc.stdout.strip()
 
+    def blame(self, repo: Path, rel_path: str) -> list[tuple[str, int]] | None:
+        if self._git is None:
+            return None
+        proc = subprocess.run(
+            [self._git, "blame", "--line-porcelain", "--", rel_path],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+        if proc.returncode != 0:
+            return None
+        lines: list[tuple[str, int]] = []
+        author, when = "", 0
+        for raw in proc.stdout.split("\n"):
+            if raw.startswith("author "):
+                author = raw[7:]
+            elif raw.startswith("author-time "):
+                when = int(raw[12:])
+            elif raw.startswith("\t"):
+                lines.append((author, when))
+        return lines
+
     def current_branch(self, repo: Path) -> str | None:
         proc = subprocess.run(
             [self._require_git(), "symbolic-ref", "--short", "HEAD"],

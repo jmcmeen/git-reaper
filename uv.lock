@@ -346,6 +346,7 @@ source = { editable = "." }
 dependencies = [
     { name = "pathspec" },
     { name = "rich" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typer" },
 ]
 
@@ -388,6 +389,7 @@ requires-dist = [
     { name = "textual", marker = "extra == 'tui'", specifier = ">=0.80" },
     { name = "tiktoken", marker = "extra == 'all'", specifier = ">=0.7" },
     { name = "tiktoken", marker = "extra == 'tokens'", specifier = ">=0.7" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "typer", specifier = ">=0.12" },
 ]
 provides-extras = ["all", "git", "tokens", "tui"]
