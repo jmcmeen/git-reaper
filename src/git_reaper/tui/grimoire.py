@@ -31,7 +31,11 @@ from textual.widgets.option_list import Option
 from git_reaper import config, incant
 from git_reaper.config import GrimoireError
 from git_reaper.models import Recipe
-from git_reaper.tui.widgets import HelpScreen, collect_option_values, mount_option_widgets
+from git_reaper.tui.widgets import (
+    HelpScreen,
+    collect_option_values,
+    mount_option_widgets,
+)
 from git_reaper.tui_ops import OPERATIONS, OPERATIONS_BY_KEY, Operation, incantation_args
 
 _HELP = (

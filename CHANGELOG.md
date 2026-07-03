@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **TUI: the footer no longer crowds.** The `1`-`6` chamber bindings still
+  jump from anywhere but are hidden from the footer, which used to wrap on
+  binding-heavy chambers; the whole bottom line now belongs to each
+  chamber's own command keys. The doors stay discoverable on the crypt map
+  (escape) and in the Ctrl+P palette.
+
+### Fixed
+
+- **TUI: the Altar's top rows untangled.** Same-edge docked widgets
+  superimpose, so since 0.9.0 the Altar's header sat buried under the
+  source row and the source hint painted over the input's top border. The
+  top stack is now spelled out: header, source row, hint, each on its own
+  line.
+
 ## [0.9.0] - 2026-07-03
 
 Last Rites and the Number of the Bits: the hardening pass and the dream

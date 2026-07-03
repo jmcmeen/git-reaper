@@ -97,6 +97,9 @@ def test_number_keys_jump_between_chambers(necropolis):
         app = ReaperApp(source=str(necropolis))
         async with app.run_test(size=(120, 45)) as pilot:
             await pilot.pause()
+            # the number bindings work but stay out of the footer, which
+            # would otherwise wrap on binding-heavy chambers
+            assert all(binding.show is False for binding in ReaperApp.BINDINGS)
             await pilot.press("2")
             await pilot.pause()
             assert isinstance(app.screen, GrimoireScreen)

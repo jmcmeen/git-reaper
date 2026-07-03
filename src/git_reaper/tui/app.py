@@ -11,6 +11,7 @@ from __future__ import annotations
 from functools import partial
 
 from textual.app import App
+from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 
 from git_reaper.tui.altar import AltarScreen
@@ -72,8 +73,10 @@ class ReaperApp(App[None]):
         "reliquary": ReliquaryScreen,
         "seance": SeanceScreen,
     }
+    # Hidden from the Footer, which would otherwise wrap on binding-heavy
+    # chambers; the crypt map and the palette carry the doors instead.
     BINDINGS = [
-        (str(i), f"chamber('{name}')", title)
+        Binding(str(i), f"chamber('{name}')", title, show=False)
         for i, (name, title, _b) in enumerate(CHAMBERS, start=1)
     ]
     CSS = """
@@ -85,11 +88,13 @@ class ReaperApp(App[None]):
     #doors { height: auto; max-height: 24; }
     #crypt-hint { width: 100%; text-align: center; color: $text-muted; padding: 1 0 0 0; }
 
-    /* shared chamber furniture */
-    #source-row { dock: top; height: 3; margin: 0 1; }
+    /* shared chamber furniture. Same-edge docks superimpose (each starts at
+       the edge), so the top stack is spelled out in margins: header on row 0,
+       the source row below it, the hint below that. */
+    #source-row { dock: top; height: 3; margin: 1 1 0 1; }
     #source { width: 1fr; }
     #browse-btn { width: 10; margin-left: 1; }
-    #source-hint { dock: top; height: 1; color: $text-muted; padding: 0 2; }
+    #source-hint { dock: top; height: 1; margin: 4 0 0 0; color: $text-muted; padding: 0 2; }
     #body { height: 1fr; }
     #sidebar { width: 42; border-right: solid $primary; }
     #operations { height: 1fr; }
