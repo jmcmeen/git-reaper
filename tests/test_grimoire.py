@@ -103,3 +103,66 @@ def test_cast_cannot_cast_cast(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["--plain", "cast", "loop"])
     assert result.exit_code == 1
+
+
+# -- writing recipes (the Grimoire chamber's save/delete) --------------------
+
+
+def test_save_recipe_creates_and_round_trips(tmp_path: Path):
+    recipe = config.Recipe(
+        name="nightly", command="census", args=[".", "--format", "json"], description="the count"
+    )
+    path = config.save_recipe(recipe, root=tmp_path)
+    assert path == tmp_path / ".reaperrc"
+    loaded = config.find_recipe("nightly", root=tmp_path)
+    assert loaded is not None
+    assert loaded.command == "census"
+    assert loaded.args == [".", "--format", "json"]
+    assert loaded.description == "the count"
+
+
+def test_save_recipe_replaces_without_touching_neighbors(tmp_path: Path):
+    (tmp_path / ".reaperrc").write_text(
+        '# my grimoire\n[omens]\nchurn = 0.5\n\n[recipes.old]\ncommand = "limbs"\nargs = []\n',
+        encoding="utf-8",
+    )
+    config.save_recipe(config.Recipe(name="old", command="census", args=["."]), root=tmp_path)
+    text = (tmp_path / ".reaperrc").read_text(encoding="utf-8")
+    assert "# my grimoire" in text  # comments outside the section survive
+    assert "churn = 0.5" in text
+    assert text.count("[recipes.old]") == 1
+    loaded = config.find_recipe("old", root=tmp_path)
+    assert loaded is not None and loaded.command == "census"
+
+
+def test_delete_recipe_strikes_only_its_section(tmp_path: Path):
+    config.save_recipe(config.Recipe(name="one", command="limbs", args=[]), root=tmp_path)
+    config.save_recipe(config.Recipe(name="two", command="census", args=[]), root=tmp_path)
+    config.delete_recipe("one", root=tmp_path)
+    assert config.find_recipe("one", root=tmp_path) is None
+    assert config.find_recipe("two", root=tmp_path) is not None
+
+
+def test_delete_pyproject_recipe_points_at_the_file(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.reaper.recipes.inscribed]\ncommand = "limbs"\nargs = []\n', encoding="utf-8"
+    )
+    with pytest.raises(config.GrimoireError, match=r"pyproject\.toml"):
+        config.delete_recipe("inscribed", root=tmp_path)
+
+
+def test_save_recipe_refuses_nameless_and_commandless(tmp_path: Path):
+    with pytest.raises(config.GrimoireError, match="needs a name"):
+        config.save_recipe(config.Recipe(name=" ", command="census", args=[]), root=tmp_path)
+    with pytest.raises(config.GrimoireError, match="needs a command"):
+        config.save_recipe(config.Recipe(name="x", command="", args=[]), root=tmp_path)
+
+
+def test_save_recipe_quotes_odd_names_and_args(tmp_path: Path):
+    recipe = config.Recipe(name="spooky pack", command="conjure", args=["--out", 'a "b".md'])
+    config.save_recipe(recipe, root=tmp_path)
+    loaded = config.find_recipe("spooky pack", root=tmp_path)
+    assert loaded is not None
+    assert loaded.args == ["--out", 'a "b".md']
+    config.delete_recipe("spooky pack", root=tmp_path)
+    assert config.find_recipe("spooky pack", root=tmp_path) is None

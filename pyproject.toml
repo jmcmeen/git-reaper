@@ -86,7 +86,7 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 # typer's declarative style puts Option()/Argument() calls in defaults
 "src/git_reaper/cli.py" = ["B008"]
 # textual's declarative style: BINDINGS is a class-level list by convention
-"src/git_reaper/tui.py" = ["RUF012"]
+"src/git_reaper/tui/*.py" = ["RUF012"]
 
 [tool.mypy]
 python_version = "3.10"

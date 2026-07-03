@@ -7,7 +7,9 @@ shows every effective value and where it came from; `cast` runs recipes.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -228,3 +230,95 @@ def commune_settings(root: Path | None = None) -> dict[str, Any]:
                 raise GrimoireError(f"{source}: commune key {key!r} must be {wants}")
             merged[key] = value
     return merged
+
+
+# --------------------------------------------------------------------------
+# writing recipes -- the Grimoire chamber's save/delete, shared with any caller
+# --------------------------------------------------------------------------
+
+
+def _toml_string(value: str) -> str:
+    """A TOML basic string. JSON escaping is a valid subset, so borrow it."""
+    return json.dumps(value)
+
+
+def _recipe_section(recipe: Recipe) -> str:
+    """The [recipes.<name>] table for one recipe, ready to append."""
+    lines = [f"[recipes.{_toml_key(recipe.name)}]"]
+    lines.append(f"command = {_toml_string(recipe.command)}")
+    lines.append(f"args = [{', '.join(_toml_string(a) for a in recipe.args)}]")
+    if recipe.description:
+        lines.append(f"description = {_toml_string(recipe.description)}")
+    return "\n".join(lines) + "\n"
+
+
+def _toml_key(name: str) -> str:
+    """A bare key when possible, a quoted one otherwise."""
+    return name if re.fullmatch(r"[A-Za-z0-9_-]+", name) else _toml_string(name)
+
+
+def _strip_recipe_section(text: str, name: str) -> str:
+    """Remove one [recipes.<name>] table, leaving everything else untouched.
+
+    Line-based surgery on the section's own lines only, so comments and
+    formatting elsewhere in the grimoire survive a save or delete.
+    """
+    header = re.compile(
+        rf"^\[recipes\.({re.escape(name)}|\"{re.escape(name)}\"|'{re.escape(name)}')\]\s*$"
+    )
+    any_header = re.compile(r"^\s*\[")
+    out: list[str] = []
+    skipping = False
+    for line in text.splitlines(keepends=True):
+        if skipping and any_header.match(line):
+            skipping = False
+        if not skipping and header.match(line.strip()):
+            skipping = True
+        if not skipping:
+            out.append(line)
+    # drop a trailing blank the removed section may have left behind
+    return "".join(out)
+
+
+def save_recipe(recipe: Recipe, root: Path | None = None) -> Path:
+    """Inscribe (or re-inscribe) a recipe in .reaperrc; returns the file written.
+
+    Only .reaperrc is ever written -- recipes living in pyproject.toml are
+    edited there by hand. Because .reaperrc outranks pyproject, saving here
+    also overrides a same-named pyproject recipe, which is the precedence a
+    reader of `grimoire` already expects.
+    """
+    if not recipe.name.strip():
+        raise GrimoireError("a recipe needs a name")
+    if not recipe.command.strip():
+        raise GrimoireError(f"recipe {recipe.name!r} needs a command")
+    root = root or Path.cwd()
+    path = root / CONFIG_FILE
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if text:
+        _load_toml(path)  # refuse to edit a miswritten grimoire
+        text = _strip_recipe_section(text, recipe.name)
+        if text and not text.endswith("\n"):
+            text += "\n"
+        if text:
+            text += "\n"
+    path.write_text(text + _recipe_section(recipe), encoding="utf-8")
+    return path
+
+
+def delete_recipe(name: str, root: Path | None = None) -> Path:
+    """Strike a recipe from .reaperrc; returns the file written.
+
+    A recipe inscribed in pyproject.toml cannot be deleted here -- the error
+    says where to edit instead of silently doing nothing.
+    """
+    root = root or Path.cwd()
+    path = root / CONFIG_FILE
+    recipe = find_recipe(name, root)
+    if recipe is None:
+        raise GrimoireError(f"no recipe named {name!r}")
+    if recipe.source != CONFIG_FILE:
+        raise GrimoireError(f"recipe {name!r} is inscribed in {recipe.source}; edit it there")
+    text = path.read_text(encoding="utf-8")
+    path.write_text(_strip_recipe_section(text, name), encoding="utf-8")
+    return path

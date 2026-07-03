@@ -468,3 +468,161 @@ OPERATIONS_BY_KEY: dict[str, Operation] = {op.key: op for op in OPERATIONS}
 
 #: Sidebar section order.
 GROUPS: tuple[str, ...] = ("reaping", "packing", "necromancy", "forensics", "dark arts")
+
+
+# --------------------------------------------------------------------------
+# the headless twin -- CLI args equivalent to a chamber's option values
+# --------------------------------------------------------------------------
+
+
+def incantation_args(op: Operation, opts: dict[str, Any]) -> list[str]:
+    """The CLI flags equivalent to these option values.
+
+    This is what makes nothing in the Sanctum TUI-trapped: the Grimoire saves
+    these args into a recipe `cast` can run, and the console shows them as
+    the reproducible invocation. Only non-default values appear, so the
+    incantation stays as short as what a human would type. Toggles are the
+    CLI's store-true flags: True emits the flag, False emits nothing.
+    """
+    args: list[str] = []
+    for spec in op.options:
+        value = opts.get(spec.name, spec.default)
+        flag = "--" + spec.name.replace("_", "-")
+        if isinstance(spec, ToggleOpt):
+            if value:
+                args.append(flag)
+        elif isinstance(spec, NumberOpt):
+            if value is not None and str(value).strip() and value != spec.default:
+                args += [flag, str(value)]
+        else:  # ChoiceOpt or TextOpt
+            text = str(value).strip() if value is not None else ""
+            if text and text != spec.default:
+                args += [flag, text]
+    return args
+
+
+# --------------------------------------------------------------------------
+# the Reliquary -- one triage pass unifying the security-and-risk rituals
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TriageRow:
+    """One finding on the Reliquary's slab, comparable across rituals."""
+
+    severity: float  # 0..1; the board sorts most-cursed first
+    ritual: str  # which ritual surfaced it
+    subject: str  # the file or package concerned
+    detail: str  # masked preview / score / advisory -- never a raw secret
+
+
+@dataclass
+class TriageReport:
+    """Everything the Reliquary found, sorted most-cursed first."""
+
+    rows: list[TriageRow] = field(default_factory=list)
+    cursed: bool = False
+    summary: str = ""
+    errors: list[str] = field(default_factory=list)  # rituals that failed, and why
+
+
+_EXHUME_SEVERITY = {"high": 1.0, "medium": 0.75, "low": 0.5}
+
+
+def triage(repo: RepoRef, limit: int = 20) -> TriageReport:
+    """Run exhume, omens, plague (offline), and rot; merge onto one slab.
+
+    Each ritual that fails (plain folder, no manifests) contributes an error
+    line instead of taking the whole board down -- a triage view that hides a
+    failed scan is worse than none.
+    """
+    report = TriageReport()
+
+    def _attempt(name: str, fn: Callable[[], list[TriageRow]]) -> None:
+        try:
+            report.rows.extend(fn())
+        except Exception as exc:
+            report.errors.append(f"{name}: {exc}")
+
+    def _exhume() -> list[TriageRow]:
+        rules = rules_core.load_rules(config.custom_rules())
+        result = rules_core.exhume(repo, rules=rules, invoked=_invoked("exhume"))
+        return [
+            TriageRow(
+                severity=_EXHUME_SEVERITY.get(f.severity, 0.5),
+                ritual="exhume",
+                subject=f.path,
+                detail=f"{f.rule}: {f.preview}",
+            )
+            for f in result.findings
+        ]
+
+    def _omens() -> list[TriageRow]:
+        result = risk_core.omens(
+            repo, limit=limit, weights=config.omens_weights(), invoked=_invoked("omens")
+        )
+        return [
+            TriageRow(
+                severity=round(0.9 * o.score, 3),  # a prophecy never outranks a found secret
+                ritual="omens",
+                subject=o.path,
+                detail=f"risk {o.score:.2f} ({o.commits} commits, {o.bug_commits} fixes)",
+            )
+            for o in result.omens
+            if o.score >= 0.4
+        ]
+
+    def _plague() -> list[TriageRow]:
+        result = plague_core.plague(repo, offline=True, invoked=_invoked("plague"))
+        return [
+            TriageRow(
+                severity=0.9,
+                ritual="plague",
+                subject=f"{a.package} {a.version}",
+                detail=f"{a.id}: {a.summary}",
+            )
+            for a in result.afflictions
+        ]
+
+    def _rot() -> list[TriageRow]:
+        result = hygiene_core.rot(repo, limit=limit, invoked=_invoked("rot"))
+        return [
+            TriageRow(
+                severity=round(min(0.4, f.age_days / 3650 * 0.4), 3),  # rot is never urgent
+                ritual="rot",
+                subject=f.path,
+                detail=f"untouched {f.age_days} days (since {f.last_commit[:10]})",
+            )
+            for f in result.files
+            if f.age_days >= 180
+        ]
+
+    _attempt("exhume", _exhume)
+    _attempt("omens", _omens)
+    _attempt("plague", _plague)
+    _attempt("rot", _rot)
+
+    report.rows.sort(key=lambda r: (-r.severity, r.ritual, r.subject))
+    report.cursed = any(r.ritual in ("exhume", "plague") for r in report.rows)
+    counts = ", ".join(
+        f"{ritual} {n}"
+        for ritual in ("exhume", "omens", "plague", "rot")
+        if (n := sum(1 for r in report.rows if r.ritual == ritual))
+    )
+    report.summary = counts or "nothing to triage; the slab is clean"
+    return report
+
+
+def render_triage(report: TriageReport) -> str:
+    """The Reliquary's one-key export: the slab as a markdown table."""
+    lines = ["# the reliquary", "", "| severity | ritual | subject | detail |"]
+    lines.append("| ---: | --- | --- | --- |")
+    for row in report.rows:
+        subject = row.subject.replace("|", "\\|")
+        detail = row.detail.replace("|", "\\|").replace("\n", " ")
+        lines.append(f"| {row.severity:.2f} | {row.ritual} | {subject} | {detail} |")
+    lines.append("")
+    lines.append(report.summary)
+    for error in report.errors:
+        lines.append(f"- skipped {error}")
+    return "\n".join(lines) + "\n"
