@@ -231,3 +231,7 @@ src/git_reaper/_version.py
 /fleet-report
 /orientation-report
 /pack-roundtrip
+/examples/audit-report
+/examples/fleet-report
+/examples/orientation-report
+/examples/pack-roundtrip
