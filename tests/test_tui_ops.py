@@ -23,8 +23,18 @@ def ref(root: Path) -> RepoRef:
     return RepoRef(source=str(root), kind="local", path=str(root))
 
 
+#: The positional rituals need their argument; sweeps supply canonical ones
+#: that exist in both the necropolis fixture and the plain-folder tests.
+POSITIONALS: dict[str, dict[str, str]] = {
+    "autopsy": {"path": "README.md"},
+    "lineage": {"needle": "x = 1"},
+    "veil": {"file": "README.md"},
+}
+
+
 def _run(op: tui_ops.Operation, root: Path, **overrides: object) -> tui_ops.ReapResult:
     opts = op.defaults()
+    opts.update(POSITIONALS.get(op.key, {}))
     opts.update(overrides)
     return op.run(ref(root), opts)
 
@@ -52,6 +62,8 @@ def test_each_operation_renders_its_own_artifact(necropolis):
             assert result.text.startswith("```") and "directories," in result.text
         elif op.key == "harvest":
             assert "git-reaper harvest" in result.text  # harvest has no schema line
+        elif op.key == "veil":
+            assert "# hi" in result.text  # the scrubbed artifact itself, no banner
         else:
             assert f"schema:    {op.key}/v1" in result.text, op.key
 
@@ -67,6 +79,8 @@ def test_history_operations_are_flagged():
         "chronicle",
         "souls",
         "haunt",
+        "autopsy",
+        "lineage",
         "graveyard",
         "rot",
         "ghosts",
@@ -197,3 +211,56 @@ def test_render_triage_is_a_markdown_slab(make_repo):
     assert text.startswith("# the reliquary")
     assert "| ---: | --- | --- | --- |" in text
     assert "exhume" in text
+
+
+# -- the positional rituals: autopsy, lineage, veil ---------------------------
+
+
+def test_autopsy_examines_one_file(necropolis):
+    result = _run(tui_ops.OPERATIONS_BY_KEY["autopsy"], necropolis)
+    assert "README.md" in result.text
+    assert "commits" in result.summary
+
+
+def test_lineage_finds_the_origin(necropolis):
+    result = _run(tui_ops.OPERATIONS_BY_KEY["lineage"], necropolis)
+    assert "first summoned" in result.summary
+
+
+def test_veil_masks_a_planted_secret(make_dir):
+    folder = make_dir({"leak.md": f"key = {AWS_KEY}\n"})
+    result = _run(tui_ops.OPERATIONS_BY_KEY["veil"], folder, file="leak.md")
+    assert AWS_KEY not in result.text
+    assert "[VEILED:" in result.text
+    assert "replacements" in result.summary
+
+
+def test_veil_anchors_relative_files_to_the_source(make_dir, tmp_path):
+    folder = make_dir({"inner.md": "clean\n"})
+    result = _run(tui_ops.OPERATIONS_BY_KEY["veil"], folder, file="inner.md")
+    assert result.text == "clean\n"
+    with pytest.raises(ValueError, match="no such artifact"):
+        _run(tui_ops.OPERATIONS_BY_KEY["veil"], folder, file="elsewhere.md")
+
+
+def test_positional_rituals_refuse_an_empty_argument(necropolis):
+    for key, positional in (("autopsy", "path"), ("lineage", "needle"), ("veil", "file")):
+        with pytest.raises(ValueError, match=positional):
+            _run(tui_ops.OPERATIONS_BY_KEY[key], necropolis, **{positional: " "})
+
+
+def test_incantation_argv_speaks_the_true_cli_grammar():
+    autopsy = tui_ops.OPERATIONS_BY_KEY["autopsy"]
+    opts = autopsy.defaults() | {"path": "src/app.py", "no_follow": True}
+    assert tui_ops.incantation_argv(autopsy, ".", opts) == ["src/app.py", "--no-follow"]
+    assert tui_ops.incantation_argv(autopsy, "/crypt", opts) == [
+        "src/app.py",
+        "-s",
+        "/crypt",
+        "--no-follow",
+    ]
+    veil = tui_ops.OPERATIONS_BY_KEY["veil"]
+    v_opts = veil.defaults() | {"file": "PACKED.md"}
+    assert tui_ops.incantation_argv(veil, "/anywhere", v_opts) == ["PACKED.md"]
+    limbs = tui_ops.OPERATIONS_BY_KEY["limbs"]
+    assert tui_ops.incantation_argv(limbs, ".", limbs.defaults()) == ["."]
