@@ -24,7 +24,7 @@ from git_reaper.tui_ops import (
     NumberOpt,
     Operation,
     ToggleOpt,
-    incantation_args,
+    incantation_argv,
 )
 
 #: The console's own commands; they act on the chamber, not on a repo.
@@ -138,9 +138,16 @@ def parse(line: str) -> Incantation:
     while i < len(rest):
         token = rest[i]
         if not token.startswith("--"):
-            if seen_source:
-                return Incantation(kind="error", error=f"one source only; {token!r} is extra")
-            source, seen_source = token, True
+            # bare tokens fill the CLI grammar in order: the positional
+            # (autopsy PATH, lineage NEEDLE, veil FILE) first, then the source.
+            if op.positional and not str(opts.get(op.positional) or "").strip():
+                opts[op.positional] = token
+            elif op.source_arg != "none" and not seen_source:
+                source, seen_source = token, True
+            else:
+                return Incantation(
+                    kind="error", error=f"{usage(op)} -- {token!r} is one too many"
+                )
             i += 1
             continue
         flag = specs.get(token)
@@ -167,14 +174,27 @@ def parse(line: str) -> Incantation:
             opts[flag.name] = value
         i += 2
 
-    argv = ("reaper", key, source, *incantation_args(op, opts))
+    if op.positional and not str(opts.get(op.positional) or "").strip():
+        return Incantation(
+            kind="error", error=f"{key} needs a {op.positional}: {usage(op)}"
+        )
+
+    argv = ("reaper", key, *incantation_argv(op, source, opts))
     return Incantation(kind="ritual", op=op, source=source, opts=opts, argv=argv)
+
+
+def usage(op: Operation) -> str:
+    """The ritual's bare-argument shape, e.g. `autopsy PATH [SOURCE]`."""
+    head = f"{op.key} {op.positional.upper()}" if op.positional else op.key
+    return head if op.source_arg == "none" else f"{head} [SOURCE]"
 
 
 def flag_help(op: Operation) -> str:
     """One line of live help for a ritual: its flags and their shapes."""
     parts: list[str] = []
     for spec in op.options:
+        if spec.name == op.positional:
+            continue  # already in the usage head
         flag = "--" + spec.name.replace("_", "-")
         if isinstance(spec, ToggleOpt):
             parts.append(flag)
@@ -185,7 +205,7 @@ def flag_help(op: Operation) -> str:
         else:
             parts.append(f"{flag} TEXT")
     flags = "  ".join(parts) if parts else "no flags"
-    return f"{op.key} [SOURCE] -- {op.description}. {flags}"
+    return f"{usage(op)} -- {op.description}. {flags}"
 
 
 def render_help() -> str:
