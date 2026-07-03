@@ -16,7 +16,11 @@ clean, portable artifacts. Library first; the CLI is a thin adapter over
 ## 🕯️ Install
 
 ```sh
-uv tool install git-reaper   # or: pip install git-reaper
+uv tool install git-reaper   
+
+# or: choose your destiny: 
+
+pip install git-reaper
 ```
 
 Both `reaper` and `git-reaper` land on your PATH (the long form is the
@@ -197,7 +201,7 @@ pip install "git-reaper[all]"      # everything
 Third-party "rituals" extend the CLI through the `git_reaper.rituals` entry
 point: a package that registers a Typer sub-app appears as `reaper <name>`.
 
-## 👻 Agents, Docker, and examples
+## 👻 Agents, Docker, and Examples
 
 Three ready-made ways in, each in its own folder:
 
@@ -271,4 +275,4 @@ make build      # sdist + wheel
 
 ## 🪦 License
 
-MIT. Rest in peace.
+MIT
