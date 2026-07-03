@@ -46,6 +46,7 @@ plugins:
 nav:
   - Home: index.md
   - Commands: commands.md
+  - Agents, Docker, and examples: agents.md
   - Library: library.md
   - API reference: api.md
   - Development: development.md
