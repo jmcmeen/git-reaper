@@ -60,7 +60,9 @@ class NecropolisScreen(Screen[None]):
                 yield Input(value=fleet_core.MANIFEST, placeholder="necropolis.toml", id="manifest")
                 yield Button("load (l)", id="load")
                 yield Select(
-                    [(op.key, op.key) for op in OPERATIONS],
+                    # positional rituals (autopsy, lineage, veil) want per-grave
+                    # arguments the fleet cannot supply; they stay off the board
+                    [(op.key, op.key) for op in OPERATIONS if op.positional is None],
                     value="census",
                     allow_blank=False,
                     id="fleet-ritual",

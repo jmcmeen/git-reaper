@@ -31,8 +31,12 @@ from textual.widgets.option_list import Option
 from git_reaper import config, incant
 from git_reaper.config import GrimoireError
 from git_reaper.models import Recipe
-from git_reaper.tui.widgets import HelpScreen, collect_option_values, mount_option_widgets
-from git_reaper.tui_ops import OPERATIONS, OPERATIONS_BY_KEY, Operation, incantation_args
+from git_reaper.tui.widgets import (
+    HelpScreen,
+    collect_option_values,
+    mount_option_widgets,
+)
+from git_reaper.tui_ops import OPERATIONS, OPERATIONS_BY_KEY, Operation, incantation_argv
 
 _HELP = (
     "[b]the grimoire[/b]\n"
@@ -183,10 +187,10 @@ class GrimoireScreen(Screen[None]):
         self._refresh_incantation()
 
     def _assemble(self) -> Recipe:
-        """The recipe as the form stands: source first, then the flag twin."""
+        """The recipe as the form stands: the ritual's true CLI argv."""
         source = self.query_one("#recipe-source", Input).value.strip() or "."
         opts = collect_option_values(self, self.current_op)
-        args = [source, *incantation_args(self.current_op, opts)]
+        args = incantation_argv(self.current_op, source, opts)
         return Recipe(
             name=self.query_one("#recipe-name", Input).value.strip(),
             command=self.current_op.key,

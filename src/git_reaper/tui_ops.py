@@ -25,22 +25,30 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from git_reaper import cache, config, fsutil
 from git_reaper.core import census as census_core
 from git_reaper.core import dedupe as dedupe_core
+from git_reaper.core import exorcise as exorcise_core
 from git_reaper.core import graveyard as graveyard_core
 from git_reaper.core import harvest as harvest_core
 from git_reaper.core import history as history_core
 from git_reaper.core import hygiene as hygiene_core
+from git_reaper.core import lineage as lineage_core
 from git_reaper.core import pack as pack_core
 from git_reaper.core import plague as plague_core
+from git_reaper.core import possession as possession_core
+from git_reaper.core import prophecy as prophecy_core
+from git_reaper.core import revenant as revenant_core
 from git_reaper.core import risk as risk_core
 from git_reaper.core import rules as rules_core
 from git_reaper.core import scan as scan_core
 from git_reaper.core import skeleton as skeleton_core
 from git_reaper.core import tree as tree_core
+from git_reaper.core import wake as wake_core
+from git_reaper.core import ward as ward_core
 from git_reaper.formatters import csvfmt, htmlfmt, jsonfmt, markdown
 from git_reaper.models import RepoRef
 
@@ -116,6 +124,13 @@ class Operation:
     needs_git: bool  # history rituals require a real repo
     run: Callable[[RepoRef, dict[str, Any]], ReapResult]
     options: tuple[OptSpec, ...] = field(default_factory=tuple)
+    #: The option that rides as the CLI's positional argument (autopsy PATH,
+    #: lineage NEEDLE, veil FILE) -- None for the source-only rituals.
+    positional: str | None = None
+    #: How the CLI takes the source: "positional" (reaper KEY SOURCE),
+    #: "flag" (reaper KEY POS -s SOURCE), or "none" (veil reads a file; the
+    #: TUI's source only anchors relative paths).
+    source_arg: str = "positional"
 
     @property
     def label(self) -> str:
@@ -232,6 +247,33 @@ def _haunt(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     return ReapResult(text, f"{len(result.hotspots)} hotspots")
 
 
+def _autopsy(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    path = str(opts.get("path") or "").strip()
+    if not path:
+        raise ValueError("autopsy needs a file: set the path option")
+    result = history_core.autopsy(
+        repo, path, follow=not opts["no_follow"], invoked=_invoked("autopsy")
+    )
+    text = _dispatch("autopsy", result, opts["format"], markdown.render_autopsy)
+    return ReapResult(text, f"{result.commits} commits, {len(result.authors)} hands")
+
+
+def _lineage(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    needle = str(opts.get("needle") or "").strip()
+    if not needle:
+        raise ValueError("lineage needs a needle: the string to trace")
+    rel_path = str(opts.get("path") or "").strip() or None
+    result = lineage_core.lineage(
+        repo, needle, regex=opts["regex"], rel_path=rel_path, invoked=_invoked("lineage")
+    )
+    text = _dispatch("lineage", result, opts["format"], markdown.render_lineage)
+    if result.origin is not None:
+        summary = f"first summoned by {result.origin.author} in {result.origin.sha[:7]}"
+    else:
+        summary = "no commit ever summoned it"
+    return ReapResult(text, summary)
+
+
 def _graveyard(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     result = graveyard_core.graveyard(repo, invoked=_invoked("graveyard"))
     text = _dispatch("graveyard", result, opts["format"], markdown.render_graveyard)
@@ -300,6 +342,23 @@ def _exhume(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     return ReapResult(text, summary, cursed=bool(result.findings))
 
 
+def _veil(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    name = str(opts.get("file") or "").strip()
+    if not name:
+        raise ValueError("veil needs a file: the artifact to scrub")
+    path = Path(name)
+    if not path.is_absolute():
+        path = Path(repo.path) / path  # relative files anchor to the source
+    if not path.is_file():
+        raise ValueError(f"no such artifact: {name}")
+    text = path.read_text(encoding="utf-8", errors="replace")
+    rules = rules_core.load_rules(config.custom_rules())
+    result, veiled = rules_core.veil(
+        text, name, repo, rules=rules, with_entropy=not opts["no_entropy"], invoked=_invoked("veil")
+    )
+    return ReapResult(veiled, f"{result.total} replacements; what was hidden stays hidden")
+
+
 def _omens(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     result = risk_core.omens(
         repo,
@@ -321,6 +380,74 @@ def _plague(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     else:
         summary = f"offline: {len(result.dependencies)} deps parsed"
     return ReapResult(text, summary, cursed=bool(result.afflictions))
+
+
+def _ward(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    policy, policy_source = config.ward_policy()
+    rules = rules_core.load_rules(config.custom_rules())
+    result = ward_core.ward(
+        repo,
+        policy,
+        policy_source=policy_source,
+        rules=rules,
+        weights=config.omens_weights(),
+        invoked=_invoked("ward"),
+    )
+    text = _dispatch("ward", result, opts["format"], markdown.render_ward)
+    broken = sum(1 for c in result.checks if not c.ok)
+    summary = f"{len(result.checks)} wards, {broken} broken"
+    return ReapResult(text, summary, cursed=result.cursed)
+
+
+def _exorcise(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    raw = str(opts["min_size"]).strip()
+    floor = fsutil.parse_size(raw) if raw else exorcise_core.DEFAULT_MIN_SIZE
+    rules = rules_core.load_rules(config.custom_rules())
+    result = exorcise_core.exorcise(repo, rules=rules, min_size=floor, invoked=_invoked("exorcise"))
+    text = _dispatch("exorcise", result, opts["format"], markdown.render_exorcise)
+    summary = (
+        f"{len(result.targets)} bodies to expel (plan only)"
+        if result.targets
+        else "the walls are clean"
+    )
+    return ReapResult(text, summary, cursed=bool(result.targets))
+
+
+def _prophecy(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = prophecy_core.prophecy(
+        repo,
+        horizon_days=opts["horizon"] or prophecy_core.DEFAULT_HORIZON_DAYS,
+        limit=opts["limit"],
+        invoked=_invoked("prophecy"),
+    )
+    text = _dispatch("prophecy", result, opts["format"], markdown.render_prophecy)
+    return ReapResult(text, f"{len(result.prophecies)} prophecies read")
+
+
+# --------------------------------------------------------------------------
+# deeper necromancy (Phase 12)
+# --------------------------------------------------------------------------
+
+
+def _wake(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = wake_core.wake(repo, invoked=_invoked("wake"))
+    text = _dispatch("wake", result, opts["format"], markdown.render_wake)
+    since = f"since {result.since}" if result.since else "whole history"
+    return ReapResult(text, f"{result.commits} commits {since}, bump {result.suggested_bump}")
+
+
+def _possession(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = possession_core.possession(repo, limit=opts["limit"], invoked=_invoked("possession"))
+    text = _dispatch("possession", result, opts["format"], markdown.render_possession)
+    return ReapResult(text, f"{len(result.files)} files, {result.possessed_count} possessed")
+
+
+def _revenant(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = revenant_core.revenant(repo, invoked=_invoked("revenant"))
+    text = _dispatch("revenant", result, opts["format"], markdown.render_revenant)
+    return ReapResult(
+        text, f"{len(result.revenants)} revenants, {len(result.offenders)} repeat offenders"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -387,6 +514,20 @@ OPERATIONS: list[Operation] = [
         (NumberOpt("limit", "limit (top N)"), _format_opt(*_ALL_FORMATS)),
     ),
     Operation(
+        "autopsy",
+        "one file's whole story",
+        "necromancy",
+        True,
+        _autopsy,
+        (
+            TextOpt("path", "path (the file to examine)"),
+            ToggleOpt("no_follow", "no follow (do not follow renames)"),
+            _format_opt("md", "json"),
+        ),
+        positional="path",
+        source_arg="flag",
+    ),
+    Operation(
         "graveyard",
         "files that lived and died",
         "necromancy",
@@ -443,6 +584,19 @@ OPERATIONS: list[Operation] = [
         (ToggleOpt("no_entropy", "no entropy (signatures only)"), _format_opt(*_ALL_FORMATS)),
     ),
     Operation(
+        "veil",
+        "scrub an artifact before it leaves",
+        "dark arts",
+        False,
+        _veil,
+        (
+            TextOpt("file", "file (the artifact to veil)"),
+            ToggleOpt("no_entropy", "no entropy (signatures only)"),
+        ),
+        positional="file",
+        source_arg="none",
+    ),
+    Operation(
         "omens",
         "composite risk prophecy",
         "dark arts",
@@ -461,6 +615,73 @@ OPERATIONS: list[Operation] = [
         False,
         _plague,
         (ToggleOpt("offline", "offline (no network)", default=True), _format_opt(*_ALL_FORMATS)),
+    ),
+    Operation(
+        "wake",
+        "changelog draft since the last tag",
+        "necromancy",
+        True,
+        _wake,
+        (_format_opt("md", "json"),),
+    ),
+    Operation(
+        "possession",
+        "who holds each file",
+        "necromancy",
+        True,
+        _possession,
+        (NumberOpt("limit", "limit (top N)"), _format_opt("md", "json")),
+    ),
+    Operation(
+        "revenant",
+        "what will not stay buried",
+        "necromancy",
+        True,
+        _revenant,
+        (_format_opt("md", "json"),),
+    ),
+    Operation(
+        "lineage",
+        "who first summoned a line",
+        "necromancy",
+        True,
+        _lineage,
+        (
+            TextOpt("needle", "needle (the string to trace)"),
+            ToggleOpt("regex", "regex (git -G)"),
+            TextOpt("path", "path (only trace within)"),
+            _format_opt("md", "json"),
+        ),
+        positional="needle",
+        source_arg="flag",
+    ),
+    Operation(
+        "prophecy",
+        "which files demand attention next",
+        "dark arts",
+        True,
+        _prophecy,
+        (
+            NumberOpt("horizon", "horizon (days)", default=prophecy_core.DEFAULT_HORIZON_DAYS),
+            NumberOpt("limit", "limit (top N)"),
+            _format_opt("md", "json"),
+        ),
+    ),
+    Operation(
+        "exorcise",
+        "the purge plan (never performed)",
+        "dark arts",
+        True,
+        _exorcise,
+        (TextOpt("min_size", "min size (e.g. 1MB)"), _format_opt("md", "json")),
+    ),
+    Operation(
+        "ward",
+        "the composite CI gate",
+        "dark arts",
+        True,
+        _ward,
+        (_format_opt("md", "json"),),
     ),
 ]
 
@@ -486,6 +707,8 @@ def incantation_args(op: Operation, opts: dict[str, Any]) -> list[str]:
     """
     args: list[str] = []
     for spec in op.options:
+        if spec.name == op.positional:
+            continue  # rides as the CLI positional, not a flag
         value = opts.get(spec.name, spec.default)
         flag = "--" + spec.name.replace("_", "-")
         if isinstance(spec, ToggleOpt):
@@ -499,6 +722,25 @@ def incantation_args(op: Operation, opts: dict[str, Any]) -> list[str]:
             if text and text != spec.default:
                 args += [flag, text]
     return args
+
+
+def incantation_argv(op: Operation, source: str, opts: dict[str, Any]) -> list[str]:
+    """Everything after `reaper <key>`: positional, source, then the flags.
+
+    Shaped by the ritual's real CLI grammar, so the twin stays castable:
+    `autopsy PATH -s SOURCE`, `veil FILE` (no source), `limbs SOURCE`.
+    The source is dropped when it is the CLI's own default (`.`).
+    """
+    args: list[str] = []
+    if op.positional:
+        value = str(opts.get(op.positional) or "").strip()
+        if value:
+            args.append(value)
+    if op.source_arg == "positional":
+        args.append(source)
+    elif op.source_arg == "flag" and source != ".":
+        args += ["-s", source]
+    return args + incantation_args(op, opts)
 
 
 # --------------------------------------------------------------------------

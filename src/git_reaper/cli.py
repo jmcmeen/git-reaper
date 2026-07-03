@@ -21,17 +21,26 @@ from rich.markup import escape
 from rich.table import Table
 
 from git_reaper import __version__, art, cache, config, fsutil, schemas
+from git_reaper.core import banshee as banshee_core
 from git_reaper.core import census as census_core
 from git_reaper.core import dedupe as dedupe_core
 from git_reaper.core import distill as distill_core
+from git_reaper.core import effigy as effigy_core
+from git_reaper.core import embalm as embalm_core
+from git_reaper.core import exorcise as exorcise_core
 from git_reaper.core import fleet as fleet_core
 from git_reaper.core import graveyard as graveyard_core
 from git_reaper.core import harvest as harvest_core
 from git_reaper.core import history as history_core
 from git_reaper.core import hygiene as hygiene_core
+from git_reaper.core import leech as leech_core
+from git_reaper.core import lineage as lineage_core
 from git_reaper.core import pack as pack_core
 from git_reaper.core import plague as plague_core
+from git_reaper.core import possession as possession_core
+from git_reaper.core import prophecy as prophecy_core
 from git_reaper.core import pulse as pulse_core
+from git_reaper.core import revenant as revenant_core
 from git_reaper.core import risk as risk_core
 from git_reaper.core import rules as rules_core
 from git_reaper.core import scan as scan_core
@@ -39,10 +48,12 @@ from git_reaper.core import scry as scry_core
 from git_reaper.core import skeleton as skeleton_core
 from git_reaper.core import tree as tree_core
 from git_reaper.core import unpack as unpack_core
+from git_reaper.core import wake as wake_core
+from git_reaper.core import ward as ward_core
 from git_reaper.core.source import ResolvedSource, resolve_source
-from git_reaper.formatters import csvfmt, htmlfmt, jsonfmt, markdown
+from git_reaper.formatters import csvfmt, htmlfmt, jsonfmt, markdown, svgfmt
 from git_reaper.gitio import GitError
-from git_reaper.models import RepoRef
+from git_reaper.models import Recipe, RepoRef
 from git_reaper.theme import make_console, theme_enabled
 
 
@@ -533,6 +544,33 @@ def grimoire_cmd(
         _say("ash", "no recipes inscribed; add [recipes.<name>] to .reaperrc")
 
 
+def _find_recipe(name: str) -> Recipe:
+    """A named recipe, or a themed death. `cast` recipes are forbidden."""
+    try:
+        recipe = config.find_recipe(name)
+    except config.GrimoireError as exc:
+        raise _die(str(exc)) from exc
+    if recipe is None:
+        raise _die(f"no recipe named {name!r}", "`reaper grimoire` lists what is inscribed")
+    if recipe.command in ("cast", "banshee"):
+        raise _die(f"a recipe cannot cast {recipe.command}; the recursion would never rest")
+    return recipe
+
+
+def _cast(recipe: Recipe, extra: list[str]) -> int:
+    """Run one recipe through the app itself; returns its exit code."""
+    argv = (["--plain"] if state.plain else []) + [recipe.command, *recipe.args, *extra]
+    _say("necro", f"casting {recipe.name}: reaper {' '.join(argv)}")
+    command = typer.main.get_command(app)
+    try:
+        # standalone mode prints usage errors itself and always leaves via
+        # SystemExit (0 on success); translate the code, never swallow it.
+        command.main(args=argv, prog_name="reaper")
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
+    return 0
+
+
 @app.command(
     "cast",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
@@ -542,26 +580,11 @@ def cast_cmd(
     name: str = typer.Argument(..., help="Recipe name from the grimoire."),
 ) -> None:
     """Run a saved recipe; extra arguments are passed through as overrides."""
-    try:
-        recipe = config.find_recipe(name)
-    except config.GrimoireError as exc:
-        raise _die(str(exc)) from exc
-    if recipe is None:
-        raise _die(f"no recipe named {name!r}", "`reaper grimoire` lists what is inscribed")
-    if recipe.command == "cast":
-        raise _die("a recipe cannot cast cast; the recursion would never rest")
-    argv = (["--plain"] if state.plain else []) + [recipe.command, *recipe.args, *ctx.args]
-    _say("necro", f"casting {name}: reaper {' '.join(argv)}")
-    command = typer.main.get_command(app)
-    try:
-        # standalone mode prints usage errors itself and always leaves via
-        # SystemExit (0 on success); translate the code, never swallow it.
-        command.main(args=argv, prog_name="reaper")
-    except SystemExit as exc:
-        code = exc.code if isinstance(exc.code, int) else 1
-        if code:
-            _say("blood", f"recipe {name!r} failed (exit {code})")
-            raise typer.Exit(code=code) from exc
+    recipe = _find_recipe(name)
+    code = _cast(recipe, list(ctx.args))
+    if code:
+        _say("blood", f"recipe {name!r} failed (exit {code})")
+        raise typer.Exit(code=code)
 
 
 # --------------------------------------------------------------------------
@@ -1345,6 +1368,440 @@ def _distill_check(skill_dir: Path) -> None:
 
 
 # --------------------------------------------------------------------------
+# last rites: ward, banshee, leech, embalm (Phase 11)
+# --------------------------------------------------------------------------
+
+
+@app.command("ward")
+def ward_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """The composite CI gate: run the [ward] policy; exit 3 if any ward breaks."""
+    if schema:
+        _print_schema("ward")
+        return
+    _validate_format(fmt)
+    _banner()
+    try:
+        policy, policy_source = config.ward_policy()
+        weights = config.omens_weights()
+    except config.GrimoireError as exc:
+        raise _die(str(exc), "`reaper grimoire` shows the [ward] table") from exc
+    rules = _grimoire_rules()
+    resolved = _resolve_history(source, ref)
+    result = ward_core.ward(
+        resolved.repo,
+        policy,
+        policy_source=policy_source,
+        rules=rules,
+        weights=weights,
+        invoked=_invocation(),
+    )
+    for check in result.checks:
+        style = "necro" if check.ok else "blood"
+        held = "held" if check.ok else "BROKEN"
+        _say(style, f"{check.name} ({check.threshold}): {held} - {check.detail}")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_ward(result), out)
+    if result.cursed:
+        _say("blood", f"the circle is broken. exit {CURSED}.")
+        raise typer.Exit(code=CURSED)
+    _say("ash", "the circle holds.")
+
+
+@app.command("banshee")
+def banshee_cmd(
+    recipe: str | None = typer.Argument(None, help="Recipe from the grimoire to re-run."),
+    source: str = typer.Option(".", "--source", "-s", help="Local directory to watch."),
+    interval: float = typer.Option(
+        banshee_core.DEFAULT_INTERVAL, "--interval", help="Seconds between polls."
+    ),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to ignore."),
+    once: bool = typer.Option(False, "--once", help="Stop after the first scream."),
+    max_polls: int | None = typer.Option(
+        None, "--max-polls", help="Give up the vigil after this many quiet polls.", hidden=True
+    ),
+) -> None:
+    """Watch a directory and scream (re-run a recipe) when it changes."""
+    if recipe is None:
+        raise _die("no recipe given", "`reaper grimoire` lists what the banshee can scream")
+    found = _find_recipe(recipe)
+    root = Path(source)
+    if not root.is_dir():
+        raise _die(f"no such directory: {source}")
+    if interval <= 0:
+        raise _die("the interval must be a positive number of seconds")
+    _banner()
+    _say("necro", f"the banshee watches {root} (every {interval:g}s); ctrl+c to rest")
+    _cast(found, [])  # scream once at the start so the artifact exists
+
+    def _scream(changes: list[str]) -> None:
+        shown = ", ".join(changes[:3]) + (" ..." if len(changes) > 3 else "")
+        _say("ember", f"the banshee screams: {len(changes)} changed ({shown})")
+        code = _cast(found, [])
+        if code:
+            _say("blood", f"recipe {recipe!r} failed (exit {code}); the vigil continues")
+
+    try:
+        banshee_core.haunt(
+            root,
+            _scream,
+            interval=interval,
+            excludes=exclude,
+            once=once,
+            max_polls=max_polls,
+        )
+    except KeyboardInterrupt:
+        _say("ash", "the banshee rests.")
+
+
+@app.command("leech")
+def leech_cmd(
+    artifact: str | None = typer.Argument(None, help="Markdown document ('-' reads stdin)."),
+    out: Path = typer.Option(Path("leeched"), "--out", "-o", help="Directory for the blocks."),
+    lang: str | None = typer.Option(None, "--lang", help="Only blocks in this language."),
+    force: bool = typer.Option(False, "--force", help="Write into a non-empty directory."),
+    fmt: str = typer.Option("md", "--format", "-f", help="Report format: md or json."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Drain fenced code blocks out of a markdown document into files."""
+    if schema:
+        _print_schema("leech")
+        return
+    if artifact is None:
+        raise _die("no document given", "pass a markdown file to leech, or '-' for stdin")
+    _validate_format(fmt)
+    _banner()
+    if artifact == "-":
+        text = sys.stdin.read()
+        source_name = "-"
+        repo = RepoRef(source="stdin", kind="local", path=".")
+    else:
+        path = Path(artifact)
+        if not path.is_file():
+            raise _die(f"no such document: {artifact}")
+        text = path.read_text(encoding="utf-8", errors="replace")
+        source_name = str(path)
+        repo = RepoRef(source=str(path), kind="local", path=str(path.parent or "."))
+    try:
+        result, contents = leech_core.leech(
+            text, source_name, repo, lang=lang, invoked=_invocation()
+        )
+        result.out = str(out)
+        leech_core.write_blocks(contents, out, force=force)
+    except (leech_core.LeechError, unpack_core.ReanimateError) as exc:
+        raise _die(str(exc)) from exc
+    _say("necro", f"drained {len(result.blocks)} blocks into {out}")
+    if result.skipped:
+        _say("ember", f"{result.skipped} blocks skipped by the language filter")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), None)
+    else:
+        _emit(markdown.render_leech(result), None)
+
+
+@app.command("embalm")
+def embalm_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    out: Path | None = typer.Option(
+        None, "--out", "-o", help="Archive path (default <name>.tar.gz)."
+    ),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    fmt: str = typer.Option("md", "--format", "-f", help="Receipt format: md or json."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha (remote sources)."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Preserve a repo state in a deterministic, provenance-stamped tarball."""
+    if schema:
+        _print_schema("embalm")
+        return
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve(source, ref=ref)
+    target = out if out is not None else Path(f"{Path(resolved.repo.path).name}.tar.gz")
+    result = embalm_core.embalm(resolved.repo, target, excludes=exclude, invoked=_invocation())
+    _say(
+        "necro",
+        f"embalmed {result.files} files ({fsutil.human_size(result.total_bytes)}) "
+        f"into {result.out}",
+    )
+    _say("bone", f"archive sha256: {result.archive_sha256}")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), None)
+    else:
+        _emit(markdown.render_embalm(result), None)
+
+
+# --------------------------------------------------------------------------
+# the number of the bits: wake, lineage, possession, revenant, prophecy,
+# exorcise, effigy (Phase 12)
+# --------------------------------------------------------------------------
+
+
+@app.command("wake")
+def wake_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    since: str | None = typer.Option(
+        None, "--since", help="Count from this ref instead of the last tag."
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Draft a Keep-a-Changelog section from the commits since the last tag."""
+    if schema:
+        _print_schema("wake")
+        return
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = wake_core.wake(resolved.repo, since=since, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    told = f"since {result.since}" if result.since else "from the whole history"
+    _say(
+        "necro", f"recounted {result.commits} deeds {told}; suggested bump: {result.suggested_bump}"
+    )
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_wake(result), out)
+
+
+@app.command("lineage")
+def lineage_cmd(
+    needle: str | None = typer.Argument(None, help="The string (or pattern) to trace."),
+    source: str = typer.Option(".", "--source", "-s", help="Local path or repo URL."),
+    regex: bool = typer.Option(False, "--regex", help="Treat the needle as a regex (git -G)."),
+    path: str | None = typer.Option(None, "--path", help="Only trace within this path."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Trace a line's true origin across history (git's pickaxe)."""
+    if schema:
+        _print_schema("lineage")
+        return
+    if needle is None:
+        raise _die("no needle given", 'pass the string to trace: `reaper lineage "def main"`')
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = lineage_core.lineage(
+            resolved.repo, needle, regex=regex, rel_path=path, invoked=_invocation()
+        )
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    if result.origin is not None:
+        _say(
+            "necro",
+            f"first summoned by {result.origin.author} in {result.origin.sha[:7]} "
+            f"({result.origin.date[:10]}); {len(result.commits)} commits touched it",
+        )
+    else:
+        _say("ember", "no commit ever summoned it")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_lineage(result), out)
+
+
+@app.command("possession")
+def possession_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    threshold: float = typer.Option(
+        possession_core.DEFAULT_THRESHOLD,
+        "--threshold",
+        help="Ownership share (0..1) that counts as possessed.",
+    ),
+    limit: int | None = typer.Option(None, "--limit", "-n", help="Only the top N files."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """The ownership map: dominant authors, and the bus-factor hotspots."""
+    if schema:
+        _print_schema("possession")
+        return
+    if not 0 < threshold <= 1:
+        raise _die("the threshold must be between 0 and 1")
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = possession_core.possession(
+            resolved.repo, threshold=threshold, limit=limit, invoked=_invocation()
+        )
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say(
+        "necro",
+        f"mapped {len(result.files)} files; {result.possessed_count} possessed "
+        f"(one soul holds >= {threshold:.0%})",
+    )
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_possession(result), out)
+
+
+@app.command("revenant")
+def revenant_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    fixes: int = typer.Option(
+        revenant_core.DEFAULT_MIN_FIXES,
+        "--fixes",
+        help="Bug-fix commits that make a file a repeat offender.",
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Track what will not stay buried: resurrected files and repeat fixes."""
+    if schema:
+        _print_schema("revenant")
+        return
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = revenant_core.revenant(resolved.repo, min_fixes=fixes, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say(
+        "necro",
+        f"{len(result.revenants)} revenants rose; {len(result.offenders)} repeat offenders",
+    )
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_revenant(result), out)
+
+
+@app.command("prophecy")
+def prophecy_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    horizon: int = typer.Option(
+        prophecy_core.DEFAULT_HORIZON_DAYS, "--horizon", help="The trend window, in days."
+    ),
+    limit: int | None = typer.Option(None, "--limit", "-n", help="Only the top N prophecies."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Forecast which files will demand attention next. Hints, not fate."""
+    if schema:
+        _print_schema("prophecy")
+        return
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = prophecy_core.prophecy(
+            resolved.repo, horizon_days=horizon, limit=limit, invoked=_invocation()
+        )
+    except ValueError as exc:
+        raise _die(str(exc)) from exc
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say("necro", f"read {len(result.prophecies)} prophecies over a {horizon}-day horizon")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_prophecy(result), out)
+
+
+@app.command("exorcise")
+def exorcise_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    min_size: str = typer.Option(
+        "1MB", "--min-size", help="Only plan for dead blobs at least this big."
+    ),
+    no_secrets: bool = typer.Option(
+        False, "--no-secrets", help="Skip the exhume pass; plan for bloat only."
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Plan a safe history purge (filter-repo/BFG). Plans only; never rewrites."""
+    if schema:
+        _print_schema("exorcise")
+        return
+    _validate_format(fmt)
+    _banner()
+    try:
+        floor = fsutil.parse_size(min_size)
+    except ValueError as exc:
+        raise _die(str(exc)) from exc
+    rules = _grimoire_rules()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = exorcise_core.exorcise(
+            resolved.repo,
+            rules=rules,
+            min_size=floor,
+            secrets=not no_secrets,
+            invoked=_invocation(),
+        )
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    if result.targets:
+        _say("ember", f"{len(result.targets)} bodies to expel; the plan is printed, not performed")
+    else:
+        _say("necro", "nothing worth expelling; the walls are clean")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_exorcise(result), out)
+
+
+@app.command("effigy")
+def effigy_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    fmt: str = typer.Option("svg", "--format", "-f", help="svg or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Render the repo as a self-contained SVG poster: the portrait of the dead."""
+    if schema:
+        _print_schema("effigy")
+        return
+    _validate_format(fmt, ("svg", "json"))
+    _banner()
+    resolved = _resolve_history(source, ref)
+    try:
+        result = effigy_core.effigy(resolved.repo, excludes=exclude, invoked=_invocation())
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    _say(
+        "necro",
+        f"portrayed {result.name}: {result.commits} commits, {len(result.souls)} souls, "
+        f"{len(result.slices)} estates",
+    )
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(svgfmt.render_effigy(result), out)
+
+
+# --------------------------------------------------------------------------
 # necropolis (multi-repo fan-out)
 # --------------------------------------------------------------------------
 
@@ -1379,7 +1836,17 @@ def necropolis_cmd(
     if command is None:
         raise _die("no command given", "e.g. `reaper necropolis harvest --tag docs`")
     _validate_format(fmt)
-    if command in ("necropolis", "cast", "summon", "veil", "reanimate", "grimoire", "banish"):
+    if command in (
+        "necropolis",
+        "cast",
+        "summon",
+        "veil",
+        "reanimate",
+        "grimoire",
+        "banish",
+        "banshee",
+        "leech",
+    ):
         raise _die(
             f"{command!r} cannot be fanned out",
             "necropolis runs source-taking commands like harvest, conjure, or census",

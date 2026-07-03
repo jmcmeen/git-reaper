@@ -18,14 +18,21 @@ from git_reaper.models import (
     ChronicleResult,
     DistillResult,
     DoppelgangersResult,
+    EmbalmResult,
     ExhumeResult,
+    ExorciseResult,
     GhostsResult,
     GraveyardResult,
     HarvestResult,
     HauntResult,
+    LeechResult,
+    LineageResult,
     OmensResult,
     PlagueResult,
+    PossessionResult,
+    ProphecyResult,
     Provenance,
+    RevenantResult,
     RotResult,
     ScryResult,
     SoulsResult,
@@ -34,6 +41,8 @@ from git_reaper.models import (
     TreeResult,
     UnfinishedResult,
     VeilResult,
+    WakeResult,
+    WardResult,
 )
 
 _CHUNK = 65536
@@ -511,6 +520,191 @@ def render_tree(result: TreeResult, with_sizes: bool = False, with_lines: bool =
     if with_sizes:
         summary += f", {human_size(result.total_bytes)}"
     return "```\n" + "\n".join(lines) + "\n```" + summary + "\n"
+
+
+def render_ward(result: WardResult) -> str:
+    """The gate report: every ward, and whether it held."""
+    out = [render_provenance(result.provenance, "ward")]
+    out.append(f"\npolicy from: {result.policy_source}\n")
+    out.append("| ward | threshold | held | detail |")
+    out.append("| --- | --- | --- | --- |")
+    for check in result.checks:
+        held = "yes" if check.ok else "**BROKEN**"
+        out.append(f"| {check.name} | {_cell(check.threshold)} | {held} | {_cell(check.detail)} |")
+    broken = sum(1 for c in result.checks if not c.ok)
+    out.append(
+        f"\n{len(result.checks)} wards, {broken} broken."
+        + (" the circle holds." if not broken else " the circle is broken.")
+    )
+    return "\n".join(out) + "\n"
+
+
+def render_leech(result: LeechResult) -> str:
+    """What the leech drained, block by block."""
+    out = [render_provenance(result.provenance, "leech")]
+    out.append(f"\nleeched: {result.input} -> {result.out}\n")
+    out.append("| file | language | from line | size | named by doc |")
+    out.append("| --- | --- | ---: | ---: | --- |")
+    for block in result.blocks:
+        out.append(
+            f"| {_cell(block.path)} | {block.language or '(none)'} | {block.line} "
+            f"| {human_size(block.size_bytes)} | {'yes' if block.named else 'no'} |"
+        )
+    out.append(
+        f"\n{len(result.blocks)} blocks drained"
+        + (f", {result.skipped} skipped by the language filter" if result.skipped else "")
+    )
+    if not result.blocks:
+        out.append("no fenced blood to drink here.")
+    return "\n".join(out) + "\n"
+
+
+def render_embalm(result: EmbalmResult) -> str:
+    """The embalming receipt; the body itself is the tarball at --out."""
+    out = [render_provenance(result.provenance, "embalm")]
+    out.append(f"\n- preserved: {result.out}")
+    out.append(f"- bodies: {result.files} files, {human_size(result.total_bytes)}")
+    out.append(f"- archive sha256: `{result.archive_sha256}`")
+    out.append(
+        "\nthe archive carries PROVENANCE and MANIFEST.sha256 at its root; "
+        "cite the sha256 above and the snapshot stays citable alone."
+    )
+    return "\n".join(out) + "\n"
+
+
+def render_wake(result: WakeResult) -> str:
+    """A Keep-a-Changelog draft: edit it, do not worship it."""
+    out = [render_provenance(result.provenance, "wake")]
+    since = f"since {result.since} ({result.since_date[:10]})" if result.since else "whole history"
+    out.append(f"\n{result.commits} commits {since}; suggested bump: {result.suggested_bump}\n")
+    out.append("## [Unreleased]")
+    for section in result.sections:
+        out.append(f"\n### {section.title}\n")
+        for entry in section.entries:
+            out.append(f"- {_cell(entry.message)} (`{_short(entry.sha)}`)")
+    if not result.sections:
+        out.append("\nnothing to recount; the wake is quiet.")
+    out.append("\n*a draft from `reaper wake`; the reaper recounts, a human edits.*")
+    return "\n".join(out) + "\n"
+
+
+def render_lineage(result: LineageResult) -> str:
+    """The needle's history, origin first in the telling."""
+    out = [render_provenance(result.provenance, "lineage")]
+    kind = "pattern" if result.regex else "string"
+    where = f" under {result.path}" if result.path else ""
+    out.append(f"\n## {kind}: `{_cell(result.needle)}`{where}\n")
+    if result.origin is not None:
+        out.append(
+            f"first summoned by {_cell(result.origin.author)} on {result.origin.date} "
+            f"in `{_short(result.origin.sha)}`: {_cell(result.origin.message)}"
+        )
+        out.append("\n| sha | date | author | message |")
+        out.append("| --- | --- | --- | --- |")
+        for commit in result.commits:
+            out.append(
+                f"| `{_short(commit.sha)}` | {commit.date} | {_cell(commit.author)} "
+                f"| {_cell(commit.message)} |"
+            )
+        out.append(f"\n{len(result.commits)} commits touched it")
+    else:
+        out.append("no commit ever summoned it. the crypt does not know this line.")
+    return "\n".join(out) + "\n"
+
+
+def render_possession(result: PossessionResult) -> str:
+    """Who holds what, and where one soul holds everything."""
+    out = [render_provenance(result.provenance, "possession")]
+    out.append(f"\npossession threshold: {result.threshold:g}\n")
+    if result.dirs:
+        out.append("## territories\n")
+        out.append("| directory | dominant soul | share | commits | files |")
+        out.append("| --- | --- | ---: | ---: | ---: |")
+        for d in result.dirs:
+            out.append(
+                f"| {_cell(d.path)} | {_cell(d.owner)} | {d.share:.0%} | {d.commits} | {d.files} |"
+            )
+        out.append("")
+    out.append("## files\n")
+    out.append("| file | dominant soul | share | commits | possessed |")
+    out.append("| --- | --- | ---: | ---: | --- |")
+    for f in result.files:
+        out.append(
+            f"| {_cell(f.path)} | {_cell(f.owner)} | {f.share:.0%} "
+            f"| {f.commits} | {'yes' if f.possessed else ''} |"
+        )
+    out.append(
+        f"\n{result.possessed_count} files possessed (one soul holds >= "
+        f"{result.threshold:.0%} of the commits). knowledge, not blame."
+    )
+    return "\n".join(out) + "\n"
+
+
+def render_revenant(result: RevenantResult) -> str:
+    """What would not stay buried."""
+    out = [render_provenance(result.provenance, "revenant")]
+    out.append("\n## risen from the grave\n")
+    if result.revenants:
+        out.append("| file | deaths | rebirths | last died | last raised | now |")
+        out.append("| --- | ---: | ---: | --- | --- | --- |")
+        for r in result.revenants:
+            out.append(
+                f"| {_cell(r.path)} | {r.deaths} | {r.rebirths} | {r.last_died[:10]} "
+                f"| {r.last_raised[:10]} | {'alive' if r.alive else 'dead again'} |"
+            )
+    else:
+        out.append("nothing has clawed its way back. the graves hold.")
+    out.append(f"\n## repeat offenders ({result.min_fixes}+ fixes)\n")
+    if result.offenders:
+        out.append("| file | fixes | commits | last fix |")
+        out.append("| --- | ---: | ---: | --- |")
+        for o in result.offenders:
+            out.append(f"| {_cell(o.path)} | {o.bug_commits} | {o.commits} | {o.last_fix[:10]} |")
+    else:
+        out.append("no file keeps getting 'fixed'. suspiciously well-behaved.")
+    return "\n".join(out) + "\n"
+
+
+def render_prophecy(result: ProphecyResult) -> str:
+    """The forecast table. Like omens: hints, not fate."""
+    out = [render_provenance(result.provenance, "prophecy")]
+    out.append(f"\nhorizon: {result.horizon_days} days\n")
+    out.append("| prophecy | file | heat | momentum | fixes | recent | prior |")
+    out.append("| ---: | --- | ---: | ---: | ---: | ---: | ---: |")
+    for p in result.prophecies:
+        out.append(
+            f"| {p.score:.3f} | {_cell(p.path)} | {p.heat:.2f} | {p.momentum:.2f} "
+            f"| {p.bug_momentum:.2f} | {p.recent_commits} | {p.prior_commits} |"
+        )
+    out.append(
+        f"\n{len(result.prophecies)} files read. prophecies are hints, not fate; "
+        "the future belongs to whoever writes the next commit."
+    )
+    return "\n".join(out) + "\n"
+
+
+def render_exorcise(result: ExorciseResult) -> str:
+    """The purge plan. Printed, never performed."""
+    out = [render_provenance(result.provenance, "exorcise")]
+    if not result.targets:
+        out.append("\nnothing worth expelling. the walls are clean.")
+        return "\n".join(out) + "\n"
+    out.append("\n## what to expel\n")
+    out.append("| path | reason | size | sha |")
+    out.append("| --- | --- | ---: | --- |")
+    for target in result.targets:
+        size = human_size(target.size_bytes) if target.size_bytes else ""
+        sha = f"`{_short(target.sha)}`" if target.sha else ""
+        out.append(f"| {_cell(target.path)} | {_cell(target.reason)} | {size} | {sha} |")
+    out.append("\n## the rite (run none of this lightly)\n")
+    out.append("```sh")
+    out.extend(result.commands)
+    out.append("```")
+    out.append("\n## warnings\n")
+    for warning in result.warnings:
+        out.append(f"- {warning}")
+    out.append("\nthe reaper plans; only you may swing. nothing above was executed.")
+    return "\n".join(out) + "\n"
 
 
 # --------------------------------------------------------------------------

@@ -7,6 +7,135 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-03
+
+Last Rites and the Number of the Bits: the hardening pass and the dream
+rituals, landed together.
+
+### Added
+
+- **The ward (`reaper ward`).** The composite CI gate: a `[ward]` grimoire
+  table folds the `exhume`/`omens`/`plague`/`rot` thresholds and
+  `distill --check` skill freshness into one policy, and one command exits 3
+  if any ward breaks. A check that crashes fails closed — a gate that fails
+  open is no gate. With nothing inscribed, the default policy gates
+  committed secrets (`exhume = "any"`), so it is useful out of the box.
+- **The banshee (`reaper banshee <recipe>`).** Watch mode, graduated from
+  the crypt now that recipes exist to re-run: a portable polling watcher
+  (ignore rules honored, no new dependencies) that screams — re-casts the
+  recipe — whenever the watched tree changes. `--interval` tunes the poll,
+  `--once` stops after the first scream, ctrl+c lays her to rest.
+- **The leech (`reaper leech DOC.md`).** Inverse harvest, graduated from the
+  crypt: drain fenced code blocks out of ordinary markdown back into files.
+  Blocks the document names (```` ```python title=app.py ```` or a bare
+  path info string) keep their name; the rest are numbered by language.
+  `--lang` filters, duplicates get suffixes, and reanimate's path-traversal
+  guards apply — a document cannot leech itself outside `--out`.
+- **Embalming (`reaper embalm`).** A repo state preserved in a
+  provenance-stamped `.tar.gz` that is byte-identical across runs: sorted
+  entries, zeroed ownership, normalized modes, every timestamp pinned to
+  the HEAD commit's author time (the epoch for plain folders), gzip header
+  pinned too. A `PROVENANCE` block and `MANIFEST.sha256` ride at the
+  archive root, and the receipt prints the archive's own sha256, so a
+  snapshot found alone still says exactly what it is. (This also buries the
+  old `hex` idea inside embalm, as planned.)
+- **The pygit2 backend (`git-reaper[pygit2]`).** The performance pass:
+  `GIT_REAPER_BACKEND=pygit2` binds libgit2 directly for the bulk read
+  paths — the full log with per-file churn, blob enumeration and reads,
+  blame, tags — with no subprocess per call. Network and working-tree
+  operations (clone, fetch, checkout) and the per-file log shapes stay
+  delegated to real git. Parity tests hold it to byte-identical results,
+  including git's Z-suffixed UTC dates, binary numstat, and merge-commit
+  semantics. `reaper pulse` reports the extra.
+- **The wake (`reaper wake`).** Draft a Keep-a-Changelog section from the
+  commits since the last tag (or `--since REF`): conventional-commit
+  prefixes map onto Added/Fixed/Removed/Deprecated/Security, everything
+  else lands under Changed, and a version bump is suggested (a `!` or
+  BREAKING means major). Honestly labeled a draft for a human to edit —
+  and dogfooded on this very file.
+- **Lineage (`reaper lineage NEEDLE`).** Git's pickaxe with a face: every
+  commit that added or removed the needle (`-S`, or `-G` via `--regex`,
+  narrowed by `--path`), newest first, plus the origin — who first summoned
+  this line. New `pickaxe` method on every git backend.
+- **Possession (`reaper possession`).** The ownership and knowledge map:
+  dominant author per file and per top-level directory with the share they
+  hold, measured from one log pass. One soul holding `--threshold` (default
+  75%) of a file's commits flags it possessed — the single points of
+  failure to find before they leave. Knowledge, not blame.
+- **The revenant (`reaper revenant`).** What will not stay buried: files
+  deleted and re-added (deaths, rebirths, whether it walks today, via the
+  new `file_events` backend method) and repeat offenders that keep
+  collecting fix commits (`--fixes` sets the bar). The honest, git-only
+  slice of the long-shelved `zombies` idea.
+- **Prophecy (`reaper prophecy`).** Omens extended across time: a forecast
+  from heat (exponentially decayed activity), momentum (the `--horizon`
+  window against the one before it), and fresh fixes. Framed exactly like
+  omens: hints, not fate.
+- **Exorcism (`reaper exorcise`).** A *safe* purge plan composed from
+  `bloat`'s dead blobs (past `--min-size`) and `exhume`'s findings: the
+  exact `git filter-repo` and BFG commands, printed beside the warnings
+  that belong with them (rotate the secret first; rewrites have no undo).
+  It plans and prints; it never rewrites history itself.
+- **The effigy (`reaper effigy`).** The repo as a self-contained SVG
+  poster — a contributor constellation, the witching-hours heatmap, and a
+  directory treemap strip in the crypt's palette, provenance riding in the
+  `<desc>`. The first visual output; `--format json` exposes the measured
+  portrait. New `formatters/svgfmt.py`.
+- **Schema freeze prep.** A golden-registry test now pins every command's
+  result-model fields: renaming or removing a field (or dropping a command)
+  fails the build until the artifact schema version is bumped deliberately.
+  The v1 lock that Ascension (1.0.0) promises starts enforcing here.
+- **TUI: autopsy, lineage, and veil join the ritual catalog.** The Altar,
+  the incantation console, and `commune` now cover them — 31 of the CLI's
+  42 commands have a TUI surface. Positional rituals carry their argument as a
+  text option (autopsy's path, lineage's needle, veil's file; relative veil
+  files anchor to the source), and the console learned the CLI's positional
+  grammar: `/autopsy PATH [SOURCE]`, `/lineage NEEDLE --regex`, `/veil FILE`.
+  The headless twin stays true everywhere — the console's echoed argv and
+  the Grimoire's saved recipes emit real CLI invocations (`autopsy PATH -s
+  SOURCE`; `veil FILE` takes no source), so `cast` runs them unchanged. The
+  necropolis board's fleet Select hides the positional rituals (they want
+  per-grave arguments); `commune` keeps its richer dedicated autopsy/veil
+  tools and gains `lineage` with a required needle.
+- **Docker, Agent Skills, and scripted examples.** Three new top-level
+  folders, each documented in the README and on a new "Agents, Docker, and
+  examples" docs page. `docker/` runs the CLI and the `commune` MCP server
+  in a container (`docker compose up -d reaper-mcp` serves the rituals at
+  `http://localhost:6666/mcp`, guardrails engaged, loopback-bound; a `cli`
+  profile shares the image for one-off runs). `skills/` ships four portable
+  Agent Skills that teach a coding agent the rituals — `reaper-orient`,
+  `reaper-necromancy`, `reaper-audit`, and `reaper-pack` — ready to copy
+  into `.claude/skills/`. `examples/` holds five runnable bash workflows
+  (`orientation.sh`, `audit.sh`, `pack-roundtrip.sh`, `ci-gate.sh`,
+  `fleet.sh`), all honoring the stdout/stderr and exit-3 conventions.
+
+### Changed
+
+- The Sanctum, the incantation console, and the `commune` MCP server pick
+  up the six source-driven new rituals (`wake`, `possession`, `revenant`,
+  `prophecy`, `exorcise`, `ward`) automatically through the shared
+  operation registry — the ward's broken circle shows as the cursed badge.
+- `necropolis` can fan out `ward` and `embalm` across a fleet; `banshee`
+  and `leech` are refused there like the other non-source commands.
+- `grimoire` now reports the effective `[ward]` policy and its origin.
+- A recipe whose command is `banshee` is refused like `cast` — the
+  recursion would never rest.
+- **TUI: the footer no longer crowds.** The `1`-`6` chamber bindings still
+  jump from anywhere but are hidden from the footer, which used to wrap on
+  binding-heavy chambers; the whole bottom line now belongs to each
+  chamber's own command keys. The doors stay discoverable on the crypt map
+  (escape) and in the Ctrl+P palette.
+- The README wears its badges now (ci, docs, PyPI, Python versions,
+  license), and every section header carries a suitably creepy emoji.
+
+### Fixed
+
+- **TUI: the Altar's top rows untangled.** Same-edge docked widgets
+  superimpose, so the Altar's header sat buried under the source row and
+  the source hint painted over the input's top border (a regression during
+  0.9.0 development; it never shipped). The top stack is now spelled out:
+  header, source row, hint, each on its own line.
+
 ## [0.8.0] - 2026-07-03
 
 The Sanctum: one good screen becomes a workbench of chambers.
@@ -407,7 +536,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/jmcmeen/git-reaper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jmcmeen/git-reaper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...v0.6.0

@@ -12,6 +12,7 @@ from git_reaper.models import PulseCheck, PulseResult
 
 _EXTRAS = {
     "GitPython": ("git", "[git] extra"),
+    "pygit2": ("pygit2", "[pygit2] extra"),
     "tiktoken": ("tiktoken", "[tokens] extra"),
     "textual": ("textual", "[tui] extra"),
     "mcp": ("mcp", "[mcp] extra"),

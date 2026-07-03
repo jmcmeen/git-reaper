@@ -1,0 +1,52 @@
+# git-reaper in compose: a shared MCP server for a team (or just for the
+# agents on your own machine), plus a one-off CLI runner.
+#
+#   docker compose up -d reaper-mcp        # the MCP server on localhost:6666
+#   docker compose run --rm reaper census /repos/some-repo
+#
+# Point REAPER_REPOS at the directory holding your repositories (defaults to
+# ./repos next to this file):
+#
+#   REAPER_REPOS=~/repos docker compose up -d reaper-mcp
+
+services:
+  # The communion: every read-only ritual as an agent-callable MCP tool,
+  # served over streamable HTTP at http://localhost:6666/mcp
+  reaper-mcp:
+    build: .
+    image: git-reaper
+    ports:
+      # Bound to loopback on purpose: the server has no auth of its own.
+      # Put a reverse proxy in front before sharing it beyond this host.
+      - "127.0.0.1:6666:6666"
+    volumes:
+      # Read-only is enough: commune ships read-only by default.
+      - ${REAPER_REPOS:-./repos}:/repos:ro
+      # The catacombs: clones of remote sources persist across restarts.
+      - catacombs:/home/reaper/.cache/git-reaper
+    command: >
+      reaper commune /repos
+      --http 0.0.0.0:6666
+      --root /repos
+    # To let agents reap remote repos or check dependencies against OSV,
+    # widen the circle deliberately:
+    #   --host github.com                 allow cloning from a remote host
+    #   --allow-network                   let plague consult the OSV database
+    #   --allow-write                     expose resurrect/reanimate/banish
+    #     (write rituals also need the volume mounted without :ro)
+    restart: unless-stopped
+
+  # One-off CLI runs against the same image and mounts:
+  #   docker compose run --rm reaper tombstone /repos/some-repo
+  #   docker compose run --rm reaper conjure /repos/some-repo --sha256 > PACKED.md
+  reaper:
+    build: .
+    image: git-reaper
+    profiles: ["cli"]
+    entrypoint: ["reaper"]
+    volumes:
+      - ${REAPER_REPOS:-./repos}:/repos:ro
+      - catacombs:/home/reaper/.cache/git-reaper
+
+volumes:
+  catacombs:

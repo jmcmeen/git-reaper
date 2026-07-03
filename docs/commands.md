@@ -112,6 +112,112 @@ reaper cast nightly-pack
 reaper cast nightly-pack --split-tokens 50000   # override at cast time
 ```
 
+## Necromancy
+
+Mining commit history: who, what, when, and what has died. These rituals
+need a git repo (local, or a URL cloned into the catacombs at full depth);
+all of them accept `--ref` to read a branch, tag, or sha.
+
+### chronicle
+
+Extract commit history -- sha, author, date, message, files touched,
+insertions and deletions. `--changelog` groups commits under the tag that
+heads their release range.
+
+```sh
+reaper chronicle .
+reaper chronicle . -n 50 --format csv > history.csv
+reaper chronicle https://github.com/Textualize/rich --changelog -o HISTORY.md
+```
+
+### souls
+
+Contributor stats: commits, lines added and removed, first and last seen,
+and a bus-factor estimate. `--heatmap` adds a day-of-week x hour activity
+grid -- bucketed by each commit's recorded timezone, so the output never
+depends on the machine -- and names the repo's witching hour.
+
+```sh
+reaper souls .
+reaper souls . --heatmap
+reaper souls . --format json -o souls.json
+```
+
+### haunt
+
+Code churn and hotspots: files ranked by change frequency and churn, the
+classic bug-risk proxy.
+
+```sh
+reaper haunt .
+reaper haunt . -n 20 --format csv
+```
+
+### autopsy
+
+Deep single-file examination: the creation commit, rename history
+(followed by default; `--no-follow` to pin the path), authors over time,
+churn totals, and a blame-based line-age summary.
+
+```sh
+reaper autopsy src/git_reaper/cli.py
+reaper autopsy README.md -s https://github.com/Textualize/rich --format json
+```
+
+### graveyard
+
+Every file that ever lived and died: path, date of death, the fatal
+commit, and its author. Renamed-away paths count as deaths.
+
+```sh
+reaper graveyard .
+reaper graveyard . --format csv > graveyard.csv
+```
+
+### resurrect
+
+Restore a dead file's last living bytes -- read from the parent of the
+commit that removed it -- into the working tree or `--out` (a directory
+keeps the file's path; an exact file target renames it). Absolute paths
+and `..` segments are refused, same as reanimate; `--force` overwrites.
+
+```sh
+reaper graveyard .                       # find what can be raised
+reaper resurrect docs/old-spec.md
+reaper resurrect docs/old-spec.md -o attic/ --force
+```
+
+### ghosts
+
+Branch hygiene: branches ranked by abandonment, with merged-but-undeleted
+and gone-upstream flags, plus a stale flag for branches idle past `--than`.
+
+```sh
+reaper ghosts .
+reaper ghosts . --than 90d --format csv
+```
+
+### rot
+
+Staleness report: surviving files ranked by how long they have gone
+untouched, ages derived from a single log pass. The `[ward]` table can
+gate on it (`rot = "730d"`).
+
+```sh
+reaper rot . -n 30
+reaper rot . -x "docs/*" --format json
+```
+
+### tombstone
+
+A stats card for demos and READMEs -- born, age, commits, souls, last
+words, the witching hour -- as ASCII tombstone art, or JSON.
+
+```sh
+reaper tombstone .
+reaper tombstone https://github.com/Textualize/rich --format json
+```
+
 ## Dark arts
 
 Security and risk mining. `exhume` and `veil` share one rules engine
@@ -138,7 +244,8 @@ reaper exhume . --no-entropy --format html -o secrets.html
 
 Scrub secrets and configured patterns from any artifact before it leaves the
 crypt, replacing each match with `[VEILED:rule-name]`. Reads a file or stdin
-(`-`). Also available inline as `conjure --veil`.
+(`-`). Also available inline as `conjure --veil`, and as a ritual in `summon`
+and `commune`.
 
 ```sh
 reaper conjure . -o PACKED.md
@@ -229,6 +336,38 @@ reaper plague . --offline          # parse manifests, never touch the network
 reaper plague . --fail-on any      # exit 3 if any affliction is found
 ```
 
+### distill
+
+The apprentice: read a repo and emit a portable Agent Skill -- a `SKILL.md`
+bundle (default `skills/<name>/`) with `reference/` files for structure
+(the bones map), conventions (layout, languages, tooling, the measured
+commit style), commands (real build/test/lint/run invocations lifted from
+`pyproject.toml`, the `Makefile`, `package.json`, and CI workflows --
+never guessed), gotchas (the files that break most, and the fix themes
+that recur), and ownership (top souls and the bus factor; `--anon`
+reduces them to roles). Composed from rituals that already exist,
+deterministic by default: zero network, zero model calls. `--profile
+{repo,stack,onboarding}` sets the voice.
+
+Every skill is stamped with the source and sha it was distilled from, and
+`distill --check DIR` exits 3 (cursed) once the code has moved on -- a
+one-line CI freshness gate, also foldable into the `[ward]` table.
+`--polish CMD` is the opt-in escape hatch from the deterministic draft:
+each reference file's prose is piped through your own command (stdin to
+stdout -- a `claude -p` wrapper, a local model, anything you trust), while
+frontmatter and provenance stamps are held back and reattached, so a
+polisher may smooth prose but never rewrite facts of origin.
+
+```sh
+reaper distill .                                # write skills/<name>/
+reaper distill . --profile onboarding --anon -o skills/repo-guide
+reaper distill --check skills/repo-guide        # exit 3 once stale
+reaper distill . --polish "claude -p 'tighten this prose'"
+```
+
+At fleet scale, `reaper necropolis distill` writes one skill per grave
+plus a routing index skill at the library's root.
+
 ### necropolis
 
 Fan any source-taking reaper command across every grave in a
@@ -253,36 +392,203 @@ source = "/local/path/to/repo"
 name = "beta"
 ```
 
+## Last rites
+
+### ward
+
+The composite CI gate. A `[ward]` grimoire table folds the
+`exhume`/`omens`/`plague`/`rot` thresholds and `distill --check` skill
+freshness into one policy; one `reaper ward` exits 3 if any ward breaks. A
+check that crashes fails closed. With nothing inscribed, the default policy
+gates committed secrets (`exhume = "any"`).
+
+Like every command, ward reads its grimoire from where you stand -- the
+current directory -- not from the source argument. `reaper ward /elsewhere`
+scans `/elsewhere` under *your* policy; to gate a repo under its own
+`[ward]` table, run ward from inside it, as CI does.
+
+```sh
+reaper ward .                      # the whole policy, one exit code
+```
+
+```toml
+# .reaperrc
+[ward]
+exhume = "any"                     # or "high", or "off"
+omens = 0.85                       # exit 3 when any omen scores this or worse
+rot = "730d"                       # exit 3 when files sit untouched past this
+skills = ["skills/git-reaper"]     # distill --check freshness, gated
+```
+
+### banshee
+
+Watch mode: poll a directory (ignore rules honored) and scream -- re-run a
+recipe from the grimoire -- whenever it changes. Portable polling, no new
+dependencies. Runs the recipe once at the start, then keeps vigil; ctrl+c
+lays her to rest.
+
+```sh
+reaper banshee nightly-pack                    # watch ., recast on change
+reaper banshee nightly-pack -s docs/ --interval 5 --once
+```
+
+### leech
+
+The inverse of harvest for ordinary markdown: drain fenced code blocks back
+into files. Blocks the document names (` ```python title=app.py ` or a bare
+path info string) keep their name; the rest are numbered by language.
+Reanimate's path-traversal guards apply.
+
+```sh
+reaper leech TUTORIAL.md --out src/
+reaper leech notes.md --lang python            # only the python blocks
+cat model-output.md | reaper leech - --out risen/
+```
+
+### embalm
+
+Preserve a repo state in a deterministic, provenance-stamped `.tar.gz`:
+sorted entries, zeroed ownership, timestamps pinned to the HEAD commit --
+byte-identical across runs. A `PROVENANCE` block and `MANIFEST.sha256` ride
+at the archive root, and the receipt prints the archive's own sha256.
+
+```sh
+reaper embalm . -o snapshot.tar.gz
+reaper embalm . -x "*.log" --format json
+```
+
+## The number of the bits
+
+### wake
+
+Draft a Keep-a-Changelog section from the commits since the last tag (or
+`--since REF`). Conventional-commit prefixes map onto the Keep-a-Changelog
+categories, everything else lands under Changed, and a version bump is
+suggested (`!` or BREAKING means major). A draft for a human to edit.
+
+```sh
+reaper wake .
+reaper wake . --since v0.8.0 -o DRAFT.md
+```
+
+### lineage
+
+Trace a line's true origin across history with git's pickaxe: every commit
+that added or removed the needle (`-S`, or `-G` with `--regex`), plus the
+origin -- who first summoned it.
+
+```sh
+reaper lineage "def resolve_source" -s .
+reaper lineage "MAGIC_\w+" --regex --path src/
+```
+
+### possession
+
+The ownership and knowledge map: dominant author per file and per top-level
+directory, with the share they hold. One soul holding `--threshold` (default
+75%) of a file's commits flags it possessed -- the bus-factor hotspots to
+find before they leave. Knowledge, not blame.
+
+```sh
+reaper possession . -n 20
+reaper possession . --threshold 0.9 --format json
+```
+
+### revenant
+
+Track what will not stay buried: files deleted and later re-added (deaths,
+rebirths, whether it walks today) and repeat offenders that keep collecting
+fix commits (`--fixes` sets the bar).
+
+```sh
+reaper revenant .
+reaper revenant . --fixes 5
+```
+
+### prophecy
+
+Omens extended across time: forecast which files will demand attention next
+from heat (decayed activity), momentum (this `--horizon` window vs the one
+before it), and fresh fixes. Like omens: hints, not fate.
+
+```sh
+reaper prophecy . -n 20
+reaper prophecy . --horizon 30 --format json
+```
+
+### exorcise
+
+Compose `bloat`'s dead blobs (past `--min-size`) and `exhume`'s findings
+into a *safe* history-purge plan: the exact `git filter-repo` and BFG
+commands, printed beside the warnings that belong with them. It plans and
+prints; it never rewrites history itself.
+
+```sh
+reaper exorcise .
+reaper exorcise . --min-size 5MB --no-secrets
+```
+
+### effigy
+
+Render the repo as a self-contained SVG poster: a contributor
+constellation, the witching-hours heatmap, and a directory treemap strip,
+with the provenance riding in the SVG's `<desc>`. The portrait of the dead,
+suitable for a README or a talk.
+
+```sh
+reaper effigy . -o portrait.svg
+reaper effigy . --format json          # the measured portrait data
+```
+
 ## summon (the TUI)
 
-Launch the interactive Textual TUI (needs the `[tui]` extra). A Dracula-themed
-cockpit over the same core the CLI drives: pick a source, choose a ritual, tune
-its options, reap, preview, and save.
+Launch the Sanctum, the interactive Textual TUI (needs the `[tui]` extra): a
+Dracula-themed workbench of chambers over the same core the CLI drives. It
+opens on the **crypt map**; each chamber is a door -- enter opens one, the
+number keys `1`-`6` jump from anywhere, escape walks back to the map, and
+**Ctrl+P**'s palette knows every door (and switches themes live). Chambers
+keep their state while you roam.
 
 ```sh
 pip install "git-reaper[tui]"
 reaper summon .            # prefill the source
 ```
 
-- **Rituals**, grouped in the sidebar: *reaping* (limbs, harvest), *packing*
-  (conjure, census, unfinished, bones), *necromancy* (chronicle, souls, haunt,
-  graveyard, rot, ghosts, tombstone), *forensics* (doppelgangers, bloat), and
-  *dark arts* (exhume, omens, plague). Git-only rituals are marked `*` and gray
-  out when the source is a plain folder.
-- **Options panel.** Each ritual exposes its flags as widgets: `format`
-  (md/json/csv/html), `omens --lens`, `souls --heatmap`, limits, `exhume`'s
-  entropy toggle, `plague --offline` (on by default -- no surprise network).
-- **Cursed badge.** `exhume`, `omens`, and `plague` show a red badge with the
-  finding count when the scan turns up what you feared. Previews stay masked.
-- **Themes.** Defaults to `reaper-dracula`; **Ctrl+P** opens the command palette
-  to switch to any built-in theme (dracula, nord, gruvbox, ...) live.
-- **Keys.** `r` reap - `s` save (extension follows the format) - `c` copy -
-  `b` browse for a source - `/` focus source - `m` raw/rendered markdown -
-  `?` help - `q` quit.
+- **The Altar** -- run a ritual against one source: pick, tune its options,
+  reap, preview, save (`r` reap - `s` save - `c` copy - `b` browse - `m`
+  raw/rendered - `?` help). Recipes from the grimoire load with one keypress.
+- **The Grimoire** -- compose recipes visually and watch the exact CLI
+  incantation update live; save writes `.reaperrc`, so anything built here
+  runs headless later via `cast`.
+- **The Incantation console** -- assisted CLI: type `/` for a fuzzy ritual
+  menu, get live flag help, and Enter runs a real, reproducible `reaper`
+  invocation.
+- **The Necropolis board** -- the fleet, grave by grave: load a
+  `necropolis.toml`, run a ritual across every grave, drill into any artifact.
+- **The Reliquary** -- security-and-risk triage on one slab: exhume, omens,
+  plague (offline), and rot merged and sorted most-cursed first.
+- **The Seance table** -- the souls heatmap, a chronicle scrubber, and a
+  `scry` ref-versus-ref picker in one view.
 
-Commands that need positional arguments (`scry`, `autopsy`, `resurrect`,
-`reanimate`, `veil`) or that are meta (`grimoire`, `cast`, `banish`, `pulse`,
-`necropolis`) stay CLI-only.
+The ritual catalog (shared by the Altar, the console, and `commune`), grouped
+as in the sidebar: *reaping* (limbs, harvest), *packing* (conjure, census,
+unfinished, bones), *necromancy* (chronicle, souls, haunt, autopsy, graveyard,
+rot, ghosts, tombstone, wake, possession, revenant, lineage), *forensics*
+(doppelgangers, bloat), and *dark arts* (exhume, veil, omens, plague,
+prophecy, exorcise, ward). Git-only rituals are marked `*` and gray out when
+the source is a plain folder. Each ritual exposes its flags as widgets --
+including the positional rituals' arguments (`autopsy`'s path, `lineage`'s
+needle, `veil`'s file; relative files anchor to the source). `plague
+--offline` stays on by default (no surprise network), and `exhume`, `omens`,
+and `plague` light a red cursed badge when the scan turns up what you feared;
+previews stay masked.
+
+The commands that write to disk (`reanimate`, `resurrect`, `leech`) or that
+emit artifacts rather than reports (`embalm`, `effigy`, `distill`) stay
+CLI-only, along with `pulse`, `banish`, and `banshee`. Everything else has a
+chamber: `scry` sits at the Seance table, the Necropolis board drives the
+fleet, and the Grimoire chamber and the Altar's recipe list cover `grimoire`
+and `cast`.
 
 ## commune (the MCP server)
 
@@ -290,8 +596,9 @@ Serve the read-only rituals to agents over the Model Context Protocol (needs
 the `[mcp]` extra). A fourth face on the same engine: every analysis ritual in
 the TUI's catalog becomes an agent-callable tool whose input schema mirrors
 the ritual's options and whose output is the same provenance-stamped JSON the
-CLI prints -- plus `autopsy`, `scry`, and `grimoire`, which take extra
-arguments.
+CLI prints -- plus `scry` and `grimoire`, which take extra arguments.
+(`autopsy` and `veil` keep dedicated tools: a required path with a `follow`
+toggle, and raw text that never touches disk.)
 
 ```sh
 pip install "git-reaper[mcp]"
@@ -390,8 +697,9 @@ row -- are inline).
 | 3 | Cursed. The scan succeeded and found what you feared. |
 
 Exit 3 is what makes `reaper exhume --fail-on any` a one-line CI gate;
-`omens --fail-over`, `plague --fail-on`, and `necropolis` (when any grave is
-cursed) share the semantics.
+`omens --fail-over`, `plague --fail-on`, a broken `ward`, `distill --check`,
+and `necropolis` (when any grave is cursed) share the semantics. When you
+want a single gate, wire in `reaper ward` and tune the `[ward]` table.
 
 ## Plain output
 

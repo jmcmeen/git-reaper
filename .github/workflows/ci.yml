@@ -53,6 +53,20 @@ jobs:
       - run: uv sync --extra git
       - run: uv run --extra git pytest
 
+  # The base matrix runs without extras, so the pygit2 parity tests skip
+  # there. This job installs the [pygit2] extra so that backend is exercised.
+  test-pygit2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra pygit2
+      - run: uv run --extra pygit2 pytest
+
   # The base matrix runs without extras, so the Textual TUI (Pilot) tests skip
   # there. This job installs the [tui] extra so the TUI is exercised.
   test-tui:

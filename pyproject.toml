@@ -34,11 +34,12 @@ dependencies = [
 
 [project.optional-dependencies]
 git = ["GitPython>=3.1"]
+pygit2 = ["pygit2>=1.14"]
 tokens = ["tiktoken>=0.7"]
 tui = ["textual>=0.86"]
 bones = ["tree-sitter>=0.23", "tree-sitter-language-pack>=0.13"]
 mcp = ["mcp>=1.10"]
-all = ["git-reaper[git,tokens,tui,bones,mcp]"]
+all = ["git-reaper[git,pygit2,tokens,tui,bones,mcp]"]
 
 [project.scripts]
 # run() (not app) so third-party rituals attach before dispatch
@@ -110,6 +111,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # GitPython ships only in the [git] extra; the base type-check must not need it
 module = "git.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# pygit2 ships only in the [pygit2] extra; the base type-check must not need it
+module = "pygit2.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

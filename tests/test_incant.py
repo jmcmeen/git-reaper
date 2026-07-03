@@ -56,7 +56,7 @@ def test_parse_errors_are_specific():
     assert "needs a value" in incant.parse("omens --lens").error
     assert "must be one of" in incant.parse("omens --lens spooky").error
     assert "whole number" in incant.parse("haunt --limit soon").error
-    assert "one source only" in incant.parse("census a b").error
+    assert "one too many" in incant.parse("census a b").error
     assert incant.parse("").kind == "empty"
     assert "unreadable" in incant.parse('census "unclosed').error
 
@@ -64,6 +64,46 @@ def test_parse_errors_are_specific():
 def test_flag_help_and_render_help_cover_every_ritual():
     text = incant.render_help()
     for op in OPERATIONS:
-        assert f"- `{op.key} [SOURCE]" in text
+        assert f"- `{incant.usage(op)}" in text
     for meta in incant.META_COMMANDS:
         assert meta in text
+
+
+# -- the positional rituals: bare tokens fill the CLI grammar in order --------
+
+
+def test_parse_positional_then_source():
+    spell = incant.parse("/autopsy src/app.py /crypt --no-follow")
+    assert spell.kind == "ritual" and spell.op is not None and spell.op.key == "autopsy"
+    assert spell.opts["path"] == "src/app.py"
+    assert spell.source == "/crypt"
+    assert spell.argv == ("reaper", "autopsy", "src/app.py", "-s", "/crypt", "--no-follow")
+
+
+def test_parse_positional_default_source_stays_silent():
+    spell = incant.parse('/lineage "def main" --regex')
+    assert spell.kind == "ritual"
+    assert spell.opts["needle"] == "def main"
+    assert spell.source == "."
+    assert spell.argv == ("reaper", "lineage", "def main", "--regex")
+
+
+def test_parse_missing_positional_is_a_clear_error():
+    assert "needs a path" in incant.parse("/autopsy").error
+    assert "needs a needle" in incant.parse("/lineage --regex").error
+    assert "needs a file" in incant.parse("/veil").error
+
+
+def test_parse_veil_takes_a_file_and_no_source():
+    spell = incant.parse("/veil PACKED.md")
+    assert spell.kind == "ritual"
+    assert spell.opts["file"] == "PACKED.md"
+    assert spell.argv == ("reaper", "veil", "PACKED.md")
+    assert "one too many" in incant.parse("/veil PACKED.md extra").error
+
+
+def test_usage_shapes_follow_the_cli_grammar():
+    by_key = {op.key: op for op in OPERATIONS}
+    assert incant.usage(by_key["autopsy"]) == "autopsy PATH [SOURCE]"
+    assert incant.usage(by_key["veil"]) == "veil FILE"
+    assert incant.usage(by_key["census"]) == "census [SOURCE]"
