@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] - 2026-07-03
 
 Last Rites and the Number of the Bits: the hardening pass and the dream
-rituals, landed together. 
+rituals, landed together.
 
 ### Added
 
