@@ -284,6 +284,44 @@ Commands that need positional arguments (`scry`, `autopsy`, `resurrect`,
 `reanimate`, `veil`) or that are meta (`grimoire`, `cast`, `banish`, `pulse`,
 `necropolis`) stay CLI-only.
 
+## commune (the MCP server)
+
+Serve the read-only rituals to agents over the Model Context Protocol (needs
+the `[mcp]` extra). A fourth face on the same engine: every analysis ritual in
+the TUI's catalog becomes an agent-callable tool whose input schema mirrors
+the ritual's options and whose output is the same provenance-stamped JSON the
+CLI prints -- plus `autopsy`, `scry`, and `grimoire`, which take extra
+arguments.
+
+```sh
+pip install "git-reaper[mcp]"
+reaper commune .                     # stdio server, read-only, rooted at .
+reaper commune --http 127.0.0.1:6666 # shared server for a team
+reaper commune . --allow-write       # let a trusted agent resurrect/banish
+```
+
+- **Transports.** stdio by default (for local agent clients); streamable HTTP
+  with `--http HOST:PORT` for a shared or remote reaper. Off unless asked
+  for, consistent with the no-phone-home posture.
+- **Rooted.** Local paths must sit under an allowed root (`--root`,
+  repeatable; defaults to the launch source) and remote URLs on an allowed
+  host (`--host`). An agent cannot point the reaper at arbitrary disk.
+- **Read-only by default.** The writing rituals -- `resurrect`, `reanimate`
+  (whose target must land inside the allowed roots), and `banish` -- appear
+  only with `--allow-write`. `veil` is always available: it scrubs artifact
+  text in flight and touches no disk. `plague` is forced to offline manifest
+  parsing unless `--allow-network`. `exhume` returns the same masked previews
+  it prints anywhere else -- a full secret never crosses the wire.
+- **Resources and prompts.** The effective grimoire, tombstone, and census
+  are published as MCP resources; `pack-this-repo`, `audit-this-repo`, and
+  `explain-this-repo` prompts give an agent a sane default workflow.
+- **Config.** A `[commune]` grimoire table (`roots`, `hosts`, `tools`,
+  `allow_write`, `allow_network`) ships one blessed server config; flags
+  outrank it.
+
+To register with an MCP client, point it at the command -- for example,
+`claude mcp add reaper -- reaper commune ~/repos/that-cursed-monolith`.
+
 ## pulse
 
 Signs-of-life check: git present and version, optional extras installed,

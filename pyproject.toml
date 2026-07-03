@@ -37,7 +37,8 @@ git = ["GitPython>=3.1"]
 tokens = ["tiktoken>=0.7"]
 tui = ["textual>=0.86"]
 bones = ["tree-sitter>=0.23", "tree-sitter-language-pack>=0.13"]
-all = ["git-reaper[git,tokens,tui,bones]"]
+mcp = ["mcp>=1.10"]
+all = ["git-reaper[git,tokens,tui,bones,mcp]"]
 
 [project.scripts]
 # run() (not app) so third-party rituals attach before dispatch
@@ -115,6 +116,13 @@ ignore_missing_imports = true
 # tree-sitter ships only in the [bones] extra; the base type-check skips it
 module = "tree_sitter_language_pack"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# the mcp SDK's low-level Server decorators are untyped; the handlers they
+# wrap are annotated, so only the decorator strictness is relaxed here
+module = "git_reaper.commune"
+disallow_untyped_decorators = false
+disallow_untyped_calls = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

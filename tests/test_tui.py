@@ -92,14 +92,14 @@ def test_descriptions_toggle_keeps_selection(necropolis):
                         return str(option.prompt)
                 raise AssertionError(f"no option {key}")
 
-            assert "contributors" in prompt_of("souls")  # roomy by default
-            await pilot.press("d")  # compact: names only
-            await pilot.pause()
-            assert "contributors" not in prompt_of("souls")
-            assert app.current_op.key == "souls"  # selection survives the rebuild
-            await pilot.press("d")  # roomy again
+            assert "contributors" not in prompt_of("souls")  # compact by default
+            await pilot.press("d")  # roomy: descriptions beneath the names
             await pilot.pause()
             assert "contributors" in prompt_of("souls")
+            assert app.current_op.key == "souls"  # selection survives the rebuild
+            await pilot.press("d")  # compact again
+            await pilot.pause()
+            assert "contributors" not in prompt_of("souls")
             assert app.current_op.key == "souls"
 
     asyncio.run(scenario())

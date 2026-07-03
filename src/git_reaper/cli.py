@@ -1413,6 +1413,54 @@ def summon_cmd(
 
 
 # --------------------------------------------------------------------------
+# commune (the MCP server)
+# --------------------------------------------------------------------------
+
+
+@app.command("commune")
+def commune_cmd(
+    source: str = typer.Argument(".", help="Default source (path or repo URL) to reap."),
+    http: str | None = typer.Option(
+        None, "--http", help="Serve over HTTP at HOST:PORT instead of stdio."
+    ),
+    root: list[str] = typer.Option(
+        [], "--root", help="Allow reaping under this local path (repeatable)."
+    ),
+    host: list[str] = typer.Option(
+        [], "--host", help="Allow reaping repos on this remote host (repeatable)."
+    ),
+    allow_write: bool = typer.Option(
+        False, "--allow-write", help="Expose the writing rituals (resurrect, banish)."
+    ),
+    allow_network: bool = typer.Option(
+        False, "--allow-network", help="Let plague consult the OSV database."
+    ),
+) -> None:
+    """Serve the read-only rituals to agents over MCP (needs `git-reaper[mcp]`)."""
+    try:
+        import mcp  # noqa: F401
+    except ImportError as exc:
+        raise _die(
+            "the communion needs the extra; install `git-reaper[mcp]`",
+            "`reaper pulse` shows which extras are present",
+        ) from exc
+    from git_reaper import commune
+
+    try:
+        communion = commune.assemble(
+            source,
+            roots=tuple(root),
+            hosts=tuple(host),
+            allow_write=allow_write,
+            allow_network=allow_network,
+        )
+    except (commune.CommuneError, config.GrimoireError) as exc:
+        raise _die(str(exc)) from exc
+    _say("necro", f"communing over {'http ' + http if http else 'stdio'}; the veil is open")
+    commune.serve(communion, http=http)
+
+
+# --------------------------------------------------------------------------
 # easter egg
 # --------------------------------------------------------------------------
 

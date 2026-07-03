@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The Communion (`reaper commune`).** git-reaper as an MCP server, behind
+  the new `git-reaper[mcp]` extra. Every read-only analysis ritual becomes
+  an agent-callable tool returning provenance-stamped JSON, over stdio
+  (default) or `--http HOST:PORT`. Guardrails, all opt-in to loosen:
+  rooted to the launch source (`--root`/`--host` widen the circle),
+  read-only unless `--allow-write` (which reveals `resurrect`, `reanimate`,
+  and `banish`; `veil` scrubs text in flight and is always on), and
+  `plague` stays offline unless `--allow-network`. Publishes
+  the grimoire, tombstone, and census as MCP resources plus
+  pack/audit/explain prompts, and reads defaults from a `[commune]`
+  grimoire table. This retires `ouija`: the model now lives on the agent
+  side, and git-reaper keeps its no-phone-home vow.
+- **Provenance knows its caller.** `tui_ops` rituals now stamp artifacts
+  with the surface that ran them (`reaper summon (census)` vs
+  `reaper commune (census)`) via a context-scoped invoker.
+- **`reaper pulse`** now reports the `[mcp]` extra.
 - **Descriptions toggle (`d`).** The TUI rituals list can be flipped between
   the roomy two-line layout and a compact names-only view. The selected
   ritual and the graying of git-only rituals both survive the flip; the key

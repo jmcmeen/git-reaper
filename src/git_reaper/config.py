@@ -184,3 +184,35 @@ def omens_weights(root: Path | None = None) -> dict[str, float]:
     if sum(weights.values()) <= 0:
         raise GrimoireError("omens weights must not all be zero")
     return weights
+
+
+#: [commune] keys a grimoire may set, and the type each must be.
+_COMMUNE_KEYS: dict[str, type | tuple[type, ...]] = {
+    "roots": list,
+    "hosts": list,
+    "tools": list,
+    "allow_write": bool,
+    "allow_network": bool,
+    "http": str,
+}
+
+
+def commune_settings(root: Path | None = None) -> dict[str, Any]:
+    """The [commune] table: defaults for the MCP server, .reaperrc outranking
+    pyproject. Values are validated for shape here; commune owns the meaning."""
+    merged: dict[str, Any] = {}
+    for source, table in _layered_tables(root):
+        commune = table.get("commune", {})
+        if not isinstance(commune, dict):
+            raise GrimoireError(f"{source}: 'commune' must be a table")
+        for key, value in commune.items():
+            expected = _COMMUNE_KEYS.get(key)
+            if expected is None:
+                allowed = ", ".join(sorted(_COMMUNE_KEYS))
+                raise GrimoireError(f"{source}: unknown commune key {key!r} (use {allowed})")
+            if not isinstance(value, expected) or isinstance(value, bool) is not (expected is bool):
+                raise GrimoireError(f"{source}: commune key {key!r} has the wrong type")
+            if isinstance(value, list) and not all(isinstance(item, str) for item in value):
+                raise GrimoireError(f"{source}: commune key {key!r} must be a list of strings")
+            merged[key] = value
+    return merged
