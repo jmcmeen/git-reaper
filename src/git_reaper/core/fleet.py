@@ -12,6 +12,7 @@ Typer app (the same trick `cast` uses), and tests pass a fake.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -32,6 +33,9 @@ MANIFEST = "necropolis.toml"
 Runner = Callable[[list[str]], int]
 
 _FORMAT_EXT = {"md": ".md", "json": ".json", "csv": ".csv", "html": ".html"}
+
+#: Commands whose --out is a directory bundle (one skill per grave), not a file.
+BUNDLE_COMMANDS = frozenset({"distill"})
 
 
 class FleetError(ValueError):
@@ -78,7 +82,8 @@ def load_manifest(path: Path) -> list[Grave]:
 
 def derive_name(source: str) -> str:
     """A grave's name from its source: last path segment, .git shroud removed."""
-    tail = source.rstrip("/").rsplit("/", 1)[-1]
+    # Split on either separator: local Windows sources arrive with backslashes.
+    tail = re.split(r"[\\/]", source.rstrip("\\/"))[-1]
     return tail.removesuffix(".git") or "grave"
 
 
@@ -124,9 +129,10 @@ def necropolis(
     result = NecropolisResult(command=command)
     out_dir.mkdir(parents=True, exist_ok=True)
     ext = artifact_extension(args)
+    bundle = command in BUNDLE_COMMANDS
 
     for grave in chosen:
-        artifact = out_dir / f"{grave.name}{ext}"
+        artifact = out_dir / grave.name if bundle else out_dir / f"{grave.name}{ext}"
         outcome = GraveOutcome(name=grave.name, source=grave.source, artifact=str(artifact))
         try:
             code = runner([command, grave.source, *args, "--out", str(artifact)])
@@ -141,13 +147,15 @@ def necropolis(
                 outcome.error = "cursed: the scan found what you feared"
             elif code != 0:
                 outcome.error = f"the ritual failed (exit {code})"
-        if not artifact.is_file():
+        if not (artifact.is_dir() if bundle else artifact.is_file()):
             outcome.artifact = ""
         result.graves.append(outcome)
 
     index = out_dir / "INDEX.md"
     index.write_text(render_index(result), encoding="utf-8")
     result.index = str(index)
+    if bundle:
+        (out_dir / "SKILL.md").write_text(render_index_skill(result, out_dir), encoding="utf-8")
     return result
 
 
@@ -171,6 +179,61 @@ def render_index(result: NecropolisResult) -> str:
     reaped = sum(1 for o in result.graves if o.ok)
     lines.append("")
     lines.append(f"{reaped} of {len(result.graves)} graves reaped")
+    return "\n".join(lines) + "\n"
+
+
+_DESCRIPTION = re.compile(r'^description:\s*"?(.*?)"?\s*$')
+
+
+def _skill_description(skill_md: Path) -> str:
+    """A skill's own description line, read back from its frontmatter."""
+    try:
+        text = skill_md.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    for line in text.splitlines()[:10]:  # frontmatter lives at the top
+        match = _DESCRIPTION.match(line)
+        if match:
+            # Escape for the table cell it lands in: pipes and newlines corrupt it.
+            return match.group(1).replace("|", "\\|").strip()
+    return ""
+
+
+def render_index_skill(result: NecropolisResult, out_dir: Path) -> str:
+    """The routing skill at the library's root: one row per harvested skill.
+
+    An agent loads this first and follows the row to the right repo's skill;
+    each row's description is read back from the skill it routes to.
+    """
+    name = out_dir.name or "skill-library"
+    reaped = [o for o in result.graves if o.ok and o.artifact]
+    repos = "repository" if len(reaped) == 1 else "repositories"
+    lines = [
+        "---",
+        f"name: {name}",
+        f'description: "A skill library: {len(reaped)} {repos} distilled, one skill '
+        'each. Load this first, then follow the table to the right one."',
+        "---",
+        "",
+        f"# Skill library: {name}",
+        "",
+        "One skill per repository. Find the repo you are working in below and load",
+        "its `SKILL.md`; everything in it was distilled from that repo itself.",
+        "",
+        "| skill | source | what it teaches |",
+        "| --- | --- | --- |",
+    ]
+    for outcome in reaped:
+        description = _skill_description(Path(outcome.artifact) / "SKILL.md")
+        lines.append(
+            f"| [{outcome.name}]({outcome.name}/SKILL.md) | {outcome.source} | {description} |"
+        )
+    missing = [o for o in result.graves if not (o.ok and o.artifact)]
+    if missing:
+        lines.append("")
+        lines.append(
+            "Not harvested (the fan-out failed there): " + ", ".join(o.name for o in missing) + "."
+        )
     return "\n".join(lines) + "\n"
 
 

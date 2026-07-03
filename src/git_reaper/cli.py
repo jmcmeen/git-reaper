@@ -23,6 +23,7 @@ from rich.table import Table
 from git_reaper import __version__, art, cache, config, fsutil, schemas
 from git_reaper.core import census as census_core
 from git_reaper.core import dedupe as dedupe_core
+from git_reaper.core import distill as distill_core
 from git_reaper.core import fleet as fleet_core
 from git_reaper.core import graveyard as graveyard_core
 from git_reaper.core import harvest as harvest_core
@@ -1242,6 +1243,105 @@ def plague_cmd(
     if fail_on == "any" and result.afflictions:
         _say("blood", f"the plague is upon us. exit {CURSED}.")
         raise typer.Exit(code=CURSED)
+
+
+# --------------------------------------------------------------------------
+# distill (skill harvesting)
+# --------------------------------------------------------------------------
+
+
+@app.command("distill")
+def distill_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    out: Path | None = typer.Option(
+        None, "--out", "-o", help="Skill directory (default skills/<name>/)."
+    ),
+    profile: str = typer.Option("repo", "--profile", help="repo, stack, or onboarding."),
+    anon: bool = typer.Option(False, "--anon", help="Reduce ownership to anonymous roles."),
+    limit: int = typer.Option(
+        distill_core.DEFAULT_LIMIT, "--limit", "-n", help="Hotspots and souls per reference file."
+    ),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    check: Path | None = typer.Option(
+        None, "--check", help="Verify an existing skill's freshness instead of distilling."
+    ),
+    polish: str | None = typer.Option(
+        None,
+        "--polish",
+        help="Pipe each draft's prose through this command (stdin to stdout), e.g. "
+        "a `claude -p` wrapper. Stamps and frontmatter are preserved; the default "
+        "path never needs a key.",
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, or json to also print the result."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Distill a repo into a portable Agent Skill (SKILL.md + reference/)."""
+    if schema:
+        _print_schema("distill")
+        return
+    _validate_format(fmt)
+    _banner()
+    if check is not None:
+        _distill_check(check)
+        return
+    if profile not in distill_core.PROFILES:
+        raise _die(
+            f"unknown profile {profile!r}",
+            f"use --profile {{{','.join(distill_core.PROFILES)}}}",
+        )
+    resolved = _resolve_history(source, ref)
+    try:
+        result = distill_core.distill(
+            resolved.repo,
+            profile=profile,
+            anon=anon,
+            limit=limit,
+            excludes=exclude,
+            invoked=_invocation(),
+        )
+    except GitError as exc:
+        raise _history_die(exc) from exc
+    bundle = markdown.render_skill_bundle(result)
+    if polish:
+        try:
+            bundle = distill_core.polish_bundle(bundle, polish)
+        except distill_core.SkillError as exc:
+            hint = "the deterministic draft needs no --polish; retry without"
+            raise _die(str(exc), hint) from exc
+        _say("necro", f"polished {len(bundle)} drafts through `{polish}`")
+    target = out if out is not None else Path("skills") / result.name
+    for rel, content in sorted(bundle.items()):
+        path = target / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    _say("necro", f"distilled {result.name} ({result.profile}): {len(bundle)} files in {target}")
+    _say("ash", f"freshness: `reaper distill --check {target}` once the code moves on")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), None)
+
+
+def _distill_check(skill_dir: Path) -> None:
+    """Compare a skill's stamped sha to where its source stands now."""
+    try:
+        stamp = distill_core.read_stamp(skill_dir)
+    except distill_core.SkillError as exc:
+        raise _die(str(exc)) from exc
+    if stamp.sha is None:
+        raise _die(
+            "the skill carries no sha; it was distilled from a plain folder",
+            "re-distill from a git repo to make freshness checkable",
+        )
+    resolved = _resolve(stamp.source)
+    current = resolved.repo.sha
+    if current is None:
+        raise _die(f"{stamp.source} is not a git repository now; nothing to compare against")
+    if current == stamp.sha:
+        _say("necro", f"fresh: {skill_dir} still speaks for {stamp.source} @ {current[:7]}")
+        return
+    _say("blood", f"stale: distilled at {stamp.sha[:7]}, {stamp.source} is now at {current[:7]}")
+    _say("ash", f"re-run `reaper distill {stamp.source} --out {skill_dir}`")
+    raise typer.Exit(code=CURSED)
 
 
 # --------------------------------------------------------------------------

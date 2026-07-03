@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-03
+
+The Apprentice: the reaper teaches what it has learned.
+
+### Added
+
+- **The Apprentice (`reaper distill`).** Skill harvesting: read a repo and
+  emit a portable Agent Skill — a `SKILL.md` bundle with `reference/` files
+  for structure (the bones map), conventions (layout, languages, tooling,
+  the measured commit style), commands (real build/test/lint/run
+  invocations lifted from `pyproject.toml`, the `Makefile`, `package.json`,
+  and CI workflows — never guessed), gotchas (the files that break most,
+  via churn plus the omens bug-fix signal, and the fix themes that recur),
+  and ownership (top souls and the bus factor; `--anon` reduces them to
+  roles). Composed from rituals that already exist, deterministic by
+  default: zero network, zero model calls. `--profile
+  {repo,stack,onboarding}` sets the voice.
+- **Polish, on your key (`distill --polish CMD`).** The opt-in escape hatch
+  from the deterministic draft: each reference file's prose is piped
+  through the caller's own command (stdin to stdout) — a `claude -p`
+  wrapper, a local model, anything you trust. Frontmatter and provenance
+  stamps are held back and reattached, so a polisher may smooth prose but
+  never rewrite facts of origin, and `--check` still works on polished
+  skills. The model lives on the caller's side; the no-phone-home vow
+  holds.
+- **Freshness is first-class.** Every skill is stamped with the source and
+  sha it was distilled from; `reaper distill --check skills/<name>/` exits
+  3 (cursed) once the code has moved on, for one-line CI gates.
+- **Skill harvesting at fleet scale.** `reaper necropolis distill` writes
+  one skill directory per grave (plus the usual `INDEX.md`); the fleet
+  runner now understands directory-bundle artifacts. A routing **index
+  skill** lands at the library's root: a `SKILL.md` an agent loads first,
+  with one row per harvested skill (description read back from the skill
+  itself) and an honest list of any graves the fan-out failed on.
+
 ## [0.6.0] - 2026-07-02
 
 The Communion: the reaper learns to speak with agents.
@@ -321,7 +356,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jmcmeen/git-reaper/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jmcmeen/git-reaper/compare/v0.3.0...v0.4.0

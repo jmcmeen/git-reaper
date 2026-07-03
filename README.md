@@ -27,6 +27,7 @@ fallback if the REAPER DAW already owns the short one).
 | `conjure` | Bundle a repo into a single LLM-ingestible file: tree first, then every text file inlined with spec'd delimiters. `--sha256` for verifiable hashes, `--split-tokens N` to shard into context-window-sized parts. |
 | `reanimate` | The inverse of `conjure`: reconstruct a directory tree from a packed artifact. `--verify` checks per-file hashes; path traversal is refused outright. |
 | `census` | File-type census: counts, sizes, line counts, language breakdown, token estimate. Size a repo before packing it. |
+| `distill` | Skill harvesting: read a repo and emit a portable Agent Skill (`SKILL.md` + `reference/`) that teaches a model to work there — conventions, real build/test/lint commands, the structural map, the files that break most, and who to ask (`--anon` for roles). Deterministic, no network, no model calls; `--polish CMD` optionally pipes each draft's prose through your own agent command (stamps and frontmatter protected). `--profile {repo,stack,onboarding}` sets the voice; `--check skills/<name>/` exits 3 when the code has moved past the stamped sha. `necropolis distill` harvests a whole fleet into a skill library with a routing index skill at its root. |
 | `unfinished` | Scan for TODO / FIXME / HACK / XXX markers, with authors via git blame and `--age` for how long each has haunted. |
 | `grimoire` | Show effective configuration, where each value came from, and stored recipes. |
 | `cast` | Run a saved recipe from the grimoire instead of retyping nine flags. |
@@ -80,6 +81,10 @@ reaper harvest https://github.com/Textualize/rich --pattern "*.md" -o RICH.md
 reaper conjure . --sha256 --split-tokens 100000 -o PACKED.md
 reaper reanimate PACKED.md --out risen/ --verify
 reaper census . --format csv | head
+reaper distill . --out skills/git-reaper/     # harvest an Agent Skill
+reaper distill --check skills/git-reaper/     # is the skill still true? (exit 3 if stale)
+reaper distill . --polish 'claude -p "tighten this skill draft"'  # your model, your key
+reaper necropolis distill --org acme --out-dir skills/  # a skill library + routing skill
 reaper unfinished . --age
 reaper cast nightly-pack
 reaper limbs . --format json | jq .file_count
