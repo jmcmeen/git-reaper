@@ -244,7 +244,8 @@ reaper exhume . --no-entropy --format html -o secrets.html
 
 Scrub secrets and configured patterns from any artifact before it leaves the
 crypt, replacing each match with `[VEILED:rule-name]`. Reads a file or stdin
-(`-`). Also available inline as `conjure --veil`.
+(`-`). Also available inline as `conjure --veil`, and as a ritual in `summon`
+and `commune`.
 
 ```sh
 reaper conjure . -o PACKED.md
@@ -541,36 +542,53 @@ reaper effigy . --format json          # the measured portrait data
 
 ## summon (the TUI)
 
-Launch the interactive Textual TUI (needs the `[tui]` extra). A Dracula-themed
-cockpit over the same core the CLI drives: pick a source, choose a ritual, tune
-its options, reap, preview, and save.
+Launch the Sanctum, the interactive Textual TUI (needs the `[tui]` extra): a
+Dracula-themed workbench of chambers over the same core the CLI drives. It
+opens on the **crypt map**; each chamber is a door -- enter opens one, the
+number keys `1`-`6` jump from anywhere, escape walks back to the map, and
+**Ctrl+P**'s palette knows every door (and switches themes live). Chambers
+keep their state while you roam.
 
 ```sh
 pip install "git-reaper[tui]"
 reaper summon .            # prefill the source
 ```
 
-- **Rituals**, grouped in the sidebar: *reaping* (limbs, harvest), *packing*
-  (conjure, census, unfinished, bones), *necromancy* (chronicle, souls, haunt,
-  graveyard, rot, ghosts, tombstone, wake, possession, revenant), *forensics*
-  (doppelgangers, bloat), and *dark arts* (exhume, omens, plague, prophecy,
-  exorcise, ward). Git-only rituals are marked `*` and gray out when the
-  source is a plain folder.
-- **Options panel.** Each ritual exposes its flags as widgets: `format`
-  (md/json/csv/html), `omens --lens`, `souls --heatmap`, limits, `exhume`'s
-  entropy toggle, `plague --offline` (on by default -- no surprise network).
-- **Cursed badge.** `exhume`, `omens`, and `plague` show a red badge with the
-  finding count when the scan turns up what you feared. Previews stay masked.
-- **Themes.** Defaults to `reaper-dracula`; **Ctrl+P** opens the command palette
-  to switch to any built-in theme (dracula, nord, gruvbox, ...) live.
-- **Keys.** `r` reap - `s` save (extension follows the format) - `c` copy -
-  `b` browse for a source - `/` focus source - `m` raw/rendered markdown -
-  `?` help - `q` quit.
+- **The Altar** -- run a ritual against one source: pick, tune its options,
+  reap, preview, save (`r` reap - `s` save - `c` copy - `b` browse - `m`
+  raw/rendered - `?` help). Recipes from the grimoire load with one keypress.
+- **The Grimoire** -- compose recipes visually and watch the exact CLI
+  incantation update live; save writes `.reaperrc`, so anything built here
+  runs headless later via `cast`.
+- **The Incantation console** -- assisted CLI: type `/` for a fuzzy ritual
+  menu, get live flag help, and Enter runs a real, reproducible `reaper`
+  invocation.
+- **The Necropolis board** -- the fleet, grave by grave: load a
+  `necropolis.toml`, run a ritual across every grave, drill into any artifact.
+- **The Reliquary** -- security-and-risk triage on one slab: exhume, omens,
+  plague (offline), and rot merged and sorted most-cursed first.
+- **The Seance table** -- the souls heatmap, a chronicle scrubber, and a
+  `scry` ref-versus-ref picker in one view.
 
-Commands that need positional arguments (`scry`, `autopsy`, `resurrect`,
-`reanimate`, `veil`, `lineage`, `leech`) or that are meta (`grimoire`, `cast`,
-`banish`, `banshee`, `pulse`, `necropolis`) stay CLI-only; `embalm` and
-`effigy` write artifacts rather than reports and stay CLI-only too.
+The ritual catalog (shared by the Altar, the console, and `commune`), grouped
+as in the sidebar: *reaping* (limbs, harvest), *packing* (conjure, census,
+unfinished, bones), *necromancy* (chronicle, souls, haunt, autopsy, graveyard,
+rot, ghosts, tombstone, wake, possession, revenant, lineage), *forensics*
+(doppelgangers, bloat), and *dark arts* (exhume, veil, omens, plague,
+prophecy, exorcise, ward). Git-only rituals are marked `*` and gray out when
+the source is a plain folder. Each ritual exposes its flags as widgets --
+including the positional rituals' arguments (`autopsy`'s path, `lineage`'s
+needle, `veil`'s file; relative files anchor to the source). `plague
+--offline` stays on by default (no surprise network), and `exhume`, `omens`,
+and `plague` light a red cursed badge when the scan turns up what you feared;
+previews stay masked.
+
+The commands that write to disk (`reanimate`, `resurrect`, `leech`) or that
+emit artifacts rather than reports (`embalm`, `effigy`, `distill`) stay
+CLI-only, along with `pulse`, `banish`, and `banshee`. Everything else has a
+chamber: `scry` sits at the Seance table, the Necropolis board drives the
+fleet, and the Grimoire chamber and the Altar's recipe list cover `grimoire`
+and `cast`.
 
 ## commune (the MCP server)
 
@@ -578,8 +596,9 @@ Serve the read-only rituals to agents over the Model Context Protocol (needs
 the `[mcp]` extra). A fourth face on the same engine: every analysis ritual in
 the TUI's catalog becomes an agent-callable tool whose input schema mirrors
 the ritual's options and whose output is the same provenance-stamped JSON the
-CLI prints -- plus `autopsy`, `scry`, and `grimoire`, which take extra
-arguments.
+CLI prints -- plus `scry` and `grimoire`, which take extra arguments.
+(`autopsy` and `veil` keep dedicated tools: a required path with a `follow`
+toggle, and raw text that never touches disk.)
 
 ```sh
 pip install "git-reaper[mcp]"
