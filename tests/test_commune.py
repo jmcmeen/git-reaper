@@ -208,7 +208,8 @@ def test_assemble_honors_the_commune_table(tmp_path: Path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     communion = commune.assemble(str(tmp_path))
-    assert communion.guard.roots == (Path("/circle"),)
+    # roots are resolved on assembly; on Windows that also gains the drive
+    assert communion.guard.roots == (Path("/circle").resolve(),)
     assert communion.guard.hosts == ("github.com",)
     assert communion.guard.allow_write is True
     assert communion.guard.allow_network is True
