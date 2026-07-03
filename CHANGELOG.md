@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Descriptions toggle (`d`).** The TUI rituals list can be flipped between
+  the roomy two-line layout and a compact names-only view. The selected
+  ritual and the graying of git-only rituals both survive the flip; the key
+  is listed in the footer and the `?` help screen.
+
+### Changed
+
+- **Room to breathe.** The TUI rituals list now shows each ritual's name on
+  its own line with a dimmed description beneath, instead of the cramped
+  `name - description` one-liner. `tui_ops.Operation` splits its `label`
+  into `key` (the display name) and a new `description` field; `label`
+  remains as a derived property and still titles the header above the
+  options panel.
+
 ## [0.5.0] - 2026-07-02
 
 Dark Arts, the Necropolis, and the Séance.
@@ -274,7 +290,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jmcmeen/git-reaper/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jmcmeen/git-reaper/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jmcmeen/git-reaper/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jmcmeen/git-reaper/compare/v0.1.0...v0.2.0

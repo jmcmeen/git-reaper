@@ -180,6 +180,7 @@ class HelpScreen(ModalScreen[None]):
             "  r  reap        s  save        c  copy artifact\n"
             "  b  browse      /  focus source\n"
             "  m  raw/rendered markdown\n"
+            "  d  ritual descriptions on/off\n"
             "  ctrl+p  themes (dracula and friends)\n"
             "  ?  this help   q  quit\n\n"
             "[b]rituals[/b]\n"
@@ -235,6 +236,7 @@ class ReaperApp(App[None]):
         ("b", "browse", "Browse"),
         ("slash", "focus_source", "Source"),
         ("m", "toggle_rendered", "Raw/rendered"),
+        ("d", "toggle_descriptions", "Descriptions"),
         ("question_mark", "help", "Help"),
         ("q", "quit", "Quit"),
     ]
@@ -248,6 +250,8 @@ class ReaperApp(App[None]):
         self._rendered: bool = False
         self._recipes: list[Recipe] = []
         self._inspect_timer: Timer | None = None
+        self._show_descriptions: bool = True
+        self._is_repo: bool = True  # last inspected source; repopulating regrays from this
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -293,7 +297,12 @@ class ReaperApp(App[None]):
             for op in OPERATIONS:
                 if op.group == group:
                     mark = " *" if op.needs_git else ""
-                    ops.add_option(Option(f"  {op.label}{mark}", id=op.key))
+                    # name on one line, dimmed description beneath -- room to breathe.
+                    # `d` collapses the list back to names only.
+                    prompt = f"  {op.key}{mark}"
+                    if self._show_descriptions:
+                        prompt += f"\n  [dim]{op.description}[/dim]"
+                    ops.add_option(Option(prompt, id=op.key))
 
     def _load_recipes(self) -> None:
         try:
@@ -496,6 +505,7 @@ class ReaperApp(App[None]):
             ops = self.query_one("#operations", OptionList)
         except NoMatches:
             return
+        self._is_repo = is_repo
         keep = ops.highlighted
         for op in OPERATIONS:
             if not op.needs_git:
@@ -511,6 +521,18 @@ class ReaperApp(App[None]):
             ops.highlighted = keep
 
     # -- actions -----------------------------------------------------------
+
+    def action_toggle_descriptions(self) -> None:
+        """Flip the rituals list between roomy (name + description) and compact."""
+        self._show_descriptions = not self._show_descriptions
+        current = self.current_op.key
+        self._populate_operations()
+        ops = self.query_one("#operations", OptionList)
+        for index in range(ops.option_count):
+            if ops.get_option_at_index(index).id == current:
+                ops.highlighted = index
+                break
+        self._apply_git_state(self._is_repo)
 
     def action_reap(self) -> None:
         source = self.query_one("#source", Input).value.strip() or "."
