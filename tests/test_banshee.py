@@ -39,9 +39,11 @@ def test_haunt_screams_on_change_and_counts(tmp_path):
     polls = iter(range(10))
 
     def fake_sleep(_seconds: float) -> None:
-        # mutate on the second poll only; the clock never actually ticks
+        # mutate on the second poll only; the clock never actually ticks.
+        # The new content must differ in SIZE: back-to-back writes can share
+        # an mtime tick on Windows, and size is the fingerprint's other half.
         if next(polls) == 1:
-            (tmp_path / "watched.txt").write_text("v2\n", encoding="utf-8")
+            (tmp_path / "watched.txt").write_text("v2, grown\n", encoding="utf-8")
 
     screams = banshee_core.haunt(
         tmp_path, heard.append, interval=0.01, max_polls=4, sleep=fake_sleep
@@ -57,7 +59,9 @@ def test_haunt_once_stops_after_the_first_scream(tmp_path):
     def restless_sleep(_seconds: float) -> None:
         nonlocal count
         count += 1
-        (tmp_path / "w.txt").write_text(f"v{count}\n", encoding="utf-8")
+        # grow the file each write: size changes are seen even when
+        # back-to-back writes share an mtime tick (Windows)
+        (tmp_path / "w.txt").write_text("v1" + "!" * count + "\n", encoding="utf-8")
 
     screams = banshee_core.haunt(
         tmp_path, lambda _c: None, once=True, max_polls=10, sleep=restless_sleep
