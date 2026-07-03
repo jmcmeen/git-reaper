@@ -227,3 +227,7 @@ src/git_reaper/_version.py
 /.claude/skills/ascii-art
 /.claude/skills/ascii-video
 /.claude
+/audit-report
+/fleet-report
+/orientation-report
+/pack-roundtrip
