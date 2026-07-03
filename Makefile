@@ -13,10 +13,6 @@ help: ## List the available rituals
 setup: ## Create the venv and install all deps (incl. dev group)
 	$(UV) sync
 
-activate: ## Print the venv activation command (run: eval "$(make activate)")
-	@test -f $(VENV)/bin/activate || { echo 'no venv yet; run `make setup` first' >&2; exit 1; }
-	@echo 'source $(VENV)/bin/activate'
-
 fmt: ## Auto-format and fix lint findings
 	$(UV) run ruff format src tests
 	$(UV) run ruff check --fix src tests
@@ -54,3 +50,9 @@ run: ## Run the CLI (ARGS="tree ." to pass arguments)
 
 pulse: ## Signs-of-life check via the CLI
 	$(UV) run reaper pulse
+
+summon: ## Summon the reaper (for testing the TUI)
+	$(UV) run reaper summon
+
+boo: ## Show a random piece of ASCII art
+	$(UV) run reaper boo

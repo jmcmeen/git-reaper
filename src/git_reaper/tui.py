@@ -250,7 +250,7 @@ class ReaperApp(App[None]):
         self._rendered: bool = False
         self._recipes: list[Recipe] = []
         self._inspect_timer: Timer | None = None
-        self._show_descriptions: bool = True
+        self._show_descriptions: bool = False
         self._is_repo: bool = True  # last inspected source; repopulating regrays from this
 
     def compose(self) -> ComposeResult:

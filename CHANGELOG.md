@@ -7,15 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-02
+
+The Communion: the reaper learns to speak with agents.
+
 ### Added
 
+- **The Communion (`reaper commune`).** git-reaper as an MCP server, behind
+  the new `git-reaper[mcp]` extra. Every read-only analysis ritual becomes
+  an agent-callable tool returning provenance-stamped JSON, over stdio
+  (default) or `--http HOST:PORT`. Guardrails, all opt-in to loosen:
+  rooted to the launch source (`--root`/`--host` widen the circle),
+  read-only unless `--allow-write` (which reveals `resurrect`, `reanimate`,
+  and `banish`; `veil` scrubs text in flight and is always on), and
+  `plague` stays offline unless `--allow-network`. Publishes
+  the grimoire, tombstone, and census as MCP resources plus
+  pack/audit/explain prompts, and reads defaults from a `[commune]`
+  grimoire table. This retires `ouija`: the model now lives on the agent
+  side, and git-reaper keeps its no-phone-home vow.
+- **Provenance knows its caller.** `tui_ops` rituals now stamp artifacts
+  with the surface that ran them (`reaper summon (census)` vs
+  `reaper commune (census)`) via a context-scoped invoker.
+- **`reaper pulse`** now reports the `[mcp]` extra.
 - **Descriptions toggle (`d`).** The TUI rituals list can be flipped between
-  the roomy two-line layout and a compact names-only view. The selected
-  ritual and the graying of git-only rituals both survive the flip; the key
-  is listed in the footer and the `?` help screen.
+  a compact names-only view (the default) and the roomy two-line layout with
+  a dimmed description beneath each name. The selected ritual and the
+  graying of git-only rituals both survive the flip; the key is listed in
+  the footer and the `?` help screen.
+- **The grim reaper takes the stage.** The gallery gains a full hooded
+  figure -- blade arcing over the cowl, skeletal grip on the shaft, tattered
+  hem trailing into the mist (per the ASCII brief) -- plus a hooded visage
+  for skinny terminals, both summonable via the hidden `reaper boo`.
 
 ### Changed
 
+- **Art hangs in a gallery now.** The art module became a data-driven
+  package: each piece lives in its own text file under
+  `art/gallery/` (the `boo()` pool, auto-discovered) or `art/seasonal/`,
+  retrieved by name through a cached `piece()` loader. Dropping a `.txt`
+  into the gallery makes it discovered, served, and tested with no code
+  change.
 - **Room to breathe.** The TUI rituals list now shows each ritual's name on
   its own line with a dimmed description beneath, instead of the cramped
   `name - description` one-liner. `tui_ops.Operation` splits its `label`
@@ -290,7 +321,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jmcmeen/git-reaper/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jmcmeen/git-reaper/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jmcmeen/git-reaper/compare/v0.2.0...v0.3.0

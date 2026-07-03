@@ -21,7 +21,9 @@ findings without re-parsing the artifact.
 from __future__ import annotations
 
 import io
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -125,8 +127,23 @@ class Operation:
         return {opt.name: opt.default for opt in self.options}
 
 
+#: Who is running the catalog -- "reaper summon" in the TUI, "reaper commune"
+#: over MCP. A context variable so concurrent MCP calls cannot cross streams.
+_INVOKER: ContextVar[str] = ContextVar("invoker", default="reaper summon")
+
+
+@contextmanager
+def invoker(name: str) -> Iterator[None]:
+    """Attribute provenance to `name` for rituals run inside this context."""
+    token = _INVOKER.set(name)
+    try:
+        yield
+    finally:
+        _INVOKER.reset(token)
+
+
 def _invoked(key: str) -> str:
-    return f"reaper summon ({key})"
+    return f"{_INVOKER.get()} ({key})"
 
 
 def _dispatch(key: str, result: Any, fmt: str, md: Callable[[Any], str]) -> str:

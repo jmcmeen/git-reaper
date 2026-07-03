@@ -14,6 +14,7 @@ _EXTRAS = {
     "GitPython": ("git", "[git] extra"),
     "tiktoken": ("tiktoken", "[tokens] extra"),
     "textual": ("textual", "[tui] extra"),
+    "mcp": ("mcp", "[mcp] extra"),
 }
 
 

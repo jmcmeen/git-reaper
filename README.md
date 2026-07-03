@@ -33,6 +33,7 @@ fallback if the REAPER DAW already owns the short one).
 | `pulse` | Signs-of-life check: git present, optional extras, cache health. |
 | `banish` | Clear the catacombs (the clone cache). `--older-than 7d` for partial exorcisms. |
 | `summon` | Launch the interactive Textual TUI (needs the `[tui]` extra): a Dracula-themed cockpit to pick a source and a ritual, tune its options (format, lens, limits, toggles), watch it reap, preview the artifact, and save it. Covers the analysis rituals (incl. `exhume`/`omens`/`bones`/`bloat`/`doppelgangers`/`plague`) with a cursed badge for findings; Ctrl+P switches themes. |
+| `commune` | Serve the read-only rituals to agents as an MCP server (needs the `[mcp]` extra): every analysis ritual becomes an agent-callable tool returning the same provenance-stamped JSON, over stdio (default) or `--http HOST:PORT`. Rooted to the launch source unless `--root`/`--host` widen the circle; the writing rituals (`resurrect`, `reanimate`, `banish`) appear only with `--allow-write`, `veil` scrubs text in flight, and `plague` stays offline without `--allow-network`. Publishes the grimoire, tombstone, and census as MCP resources plus ready-made audit/pack/explain prompts. |
 
 ### Git necromancy (history mining)
 
@@ -103,6 +104,8 @@ reaper necropolis harvest --tag docs --out-dir out/   # fan out over a manifest
 reaper haunt . --format html -o hotspots.html # self-contained dark report
 
 reaper summon .            # interactive TUI (pip install "git-reaper[tui]")
+reaper commune .           # MCP server over stdio (pip install "git-reaper[mcp]")
+reaper commune . --http 127.0.0.1:6666 --root ~/repos   # a shared reaper for a team
 ```
 
 Recipes live in `.reaperrc` (or `[tool.reaper]` in pyproject.toml), alongside
@@ -119,6 +122,11 @@ description = "the whole crypt, sharded for the model"
 pattern = "[a-z0-9-]+\\.corp\\.example\\.com"
 severity = "medium"
 veil_only = true   # veil redacts it; exhume does not report it as a secret
+
+# bless a team's `commune` MCP server with shared defaults
+[commune]
+roots = ["~/repos"]
+allow_network = true
 
 # tune the omens blend (defaults shown)
 [omens]
@@ -137,6 +145,7 @@ pip install "git-reaper[bones]"    # tree-sitter: bones for JS/TS/Go/Rust/Java/.
 pip install "git-reaper[tui]"      # textual: the Dracula `reaper summon` TUI
 pip install "git-reaper[tokens]"   # tiktoken: exact token counts
 pip install "git-reaper[git]"      # GitPython backend (GIT_REAPER_BACKEND=gitpython)
+pip install "git-reaper[mcp]"      # the `reaper commune` MCP server
 pip install "git-reaper[all]"      # everything
 ```
 
