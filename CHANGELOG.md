@@ -10,8 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] - 2026-07-03
 
 Last Rites and the Number of the Bits: the hardening pass and the dream
-rituals, landed together. Schema and plugin-API freeze prep begins here;
-feature freeze after this — if it is not in by the bits, it waits for 1.1.
+rituals, landed together. 
 
 ### Added
 
