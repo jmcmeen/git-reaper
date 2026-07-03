@@ -16,6 +16,7 @@ from git_reaper.models import (
     BonesResult,
     CensusResult,
     ChronicleResult,
+    DistillResult,
     DoppelgangersResult,
     ExhumeResult,
     GhostsResult,
@@ -510,3 +511,217 @@ def render_tree(result: TreeResult, with_sizes: bool = False, with_lines: bool =
     if with_sizes:
         summary += f", {human_size(result.total_bytes)}"
     return "```\n" + "\n".join(lines) + "\n```" + summary + "\n"
+
+
+# --------------------------------------------------------------------------
+# distill: the Agent Skill bundle
+# --------------------------------------------------------------------------
+
+
+def _skill_stamp(result: DistillResult) -> str:
+    """The provenance block a skill carries; `distill --check` reads it back."""
+    extra = [
+        f"sha:       {result.provenance.sha or 'unknown'}",
+        f"profile:   {result.profile}",
+    ]
+    return render_provenance(result.provenance, "distill", extra=extra)
+
+
+def render_skill_bundle(result: DistillResult) -> dict[str, str]:
+    """Every file in the skill directory, path -> content."""
+    files = {
+        "SKILL.md": render_skill(result),
+        "reference/conventions.md": render_skill_conventions(result),
+        "reference/commands.md": render_skill_commands(result),
+        "reference/gotchas.md": render_skill_gotchas(result),
+        "reference/ownership.md": render_skill_ownership(result),
+    }
+    if result.bones is not None:
+        files["reference/structure.md"] = render_bones(result.bones)
+    return files
+
+
+def render_skill(result: DistillResult) -> str:
+    """SKILL.md: frontmatter, the distill stamp, and the route into reference/."""
+    description = result.description.replace('"', '\\"')
+    out = [
+        "---",
+        f"name: {result.name}",
+        f'description: "{description}"',
+        "---",
+        "",
+        _skill_stamp(result),
+    ]
+    tongues = ", ".join(dict.fromkeys(s.language for s in result.languages if s.language)) or "n/a"
+    if result.profile == "onboarding":
+        out.append(f"# Welcome to {result.name}")
+        out.append("")
+        out.append(
+            f"This guide was distilled from the repository itself ({result.total_files} "
+            f"files, mostly {tongues}). Everything below was measured, not remembered, "
+            "so trust it over folklore -- and check the stamp above if it smells stale."
+        )
+    elif result.profile == "stack":
+        out.append(f"# Working on the {tongues} stack (distilled from {result.name})")
+        out.append("")
+        out.append(
+            "Use this skill when working in this repository or a sibling built on the "
+            "same stack. It carries the tooling, commands, and conventions; the "
+            "repo-specific maps in reference/ are examples of the house style."
+        )
+    else:
+        out.append(f"# Working in {result.name}")
+        out.append("")
+        out.append(
+            f"Use this skill when reading or changing code in {result.name}. It was "
+            "distilled from the repository itself: real commands, measured hotspots, "
+            "the actual commit style."
+        )
+    out.append("")
+    out.append("## The essentials")
+    out.append("")
+    if result.layout:
+        out.append(f"- Layout: {', '.join(f'`{e}`' for e in result.layout[:12])}")
+    out.append(f"- Languages: {tongues} across {result.total_files} files")
+    if result.tooling:
+        out.append(f"- Tooling: {', '.join(f'`{t}`' for t in result.tooling)}")
+    test = next((c for c in result.commands if c.kind == "test"), None)
+    lint = next((c for c in result.commands if c.kind == "lint"), None)
+    if test:
+        out.append(f"- Test with `{test.command}` (from {test.origin})")
+    if lint:
+        out.append(f"- Lint with `{lint.command}` (from {lint.origin})")
+    if result.conventional_share >= 0.5:
+        top = ", ".join(f"`{p}:`" for p in list(result.commit_prefixes)[:4])
+        out.append(
+            f"- Commits follow conventional prefixes ({result.conventional_share:.0%} "
+            f"of history; mostly {top})"
+        )
+    out.append("")
+    out.append("## Read next")
+    out.append("")
+    refs = [
+        ("reference/structure.md", "the bones map: imports, signatures, docstrings"),
+        ("reference/conventions.md", "naming, layout, lint/format, commit style"),
+        ("reference/commands.md", "real build/test/lint/run commands, not guesses"),
+        ("reference/gotchas.md", "the files that break most, and the themes that recur"),
+        ("reference/ownership.md", "who to ask"),
+    ]
+    for path, blurb in refs:
+        out.append(f"- `{path}` -- {blurb}")
+    out.append("")
+    out.append(
+        "Freshness: this skill is stamped with the source and sha above; "
+        "`reaper distill --check <this directory>` reports it stale once the code moves on."
+    )
+    return "\n".join(out) + "\n"
+
+
+def render_skill_conventions(result: DistillResult) -> str:
+    """conventions.md: what the repo does by habit, measured from itself."""
+    out = [_skill_stamp(result), "# Conventions", ""]
+    if result.layout:
+        out.append("## Layout")
+        out.append("")
+        for entry in result.layout:
+            out.append(f"- `{entry}`")
+        out.append("")
+    if result.languages:
+        out.append("## Languages")
+        out.append("")
+        out.append("| language | extension | files | lines |")
+        out.append("| --- | --- | ---: | ---: |")
+        for stat in result.languages[:10]:
+            out.append(
+                f"| {stat.language or '(none)'} | {stat.extension} "
+                f"| {stat.files} | {stat.line_count:,} |"
+            )
+        out.append("")
+    if result.tooling:
+        out.append("## Tooling on the premises")
+        out.append("")
+        for tool in result.tooling:
+            out.append(f"- `{tool}`")
+        out.append("")
+    out.append("## Commit style")
+    out.append("")
+    if result.commits_sampled == 0:
+        out.append("No commit history to read.")
+    elif result.conventional_share >= 0.25:
+        out.append(
+            f"Conventional-commit prefixes on {result.conventional_share:.0%} of "
+            f"{result.commits_sampled} commits:"
+        )
+        out.append("")
+        for prefix, count in result.commit_prefixes.items():
+            out.append(f"- `{prefix}:` x{count}")
+    else:
+        out.append(
+            f"Free-form subjects ({result.commits_sampled} commits sampled; only "
+            f"{result.conventional_share:.0%} carry a conventional prefix)."
+        )
+    return "\n".join(out) + "\n"
+
+
+def render_skill_commands(result: DistillResult) -> str:
+    """commands.md: commands lifted from the repo's own files, grouped by kind."""
+    out = [_skill_stamp(result), "# Commands", ""]
+    if not result.commands:
+        out.append("No build/test/lint commands were found in the usual places.")
+        return "\n".join(out) + "\n"
+    out.append("Lifted from the repo's own tooling files, not guessed.")
+    out.append("")
+    for kind in ("test", "lint", "format", "build", "run", "docs", "other"):
+        hints = [c for c in result.commands if c.kind == kind]
+        if not hints:
+            continue
+        out.append(f"## {kind}")
+        out.append("")
+        for hint in hints:
+            out.append(f"- `{_cell(hint.command)}` (from {hint.origin})")
+        out.append("")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def render_skill_gotchas(result: DistillResult) -> str:
+    """gotchas.md: the files that break most, and the recurring failure themes."""
+    out = [_skill_stamp(result), "# Gotchas", ""]
+    if result.gotchas:
+        out.append("Files that change (and get fixed) most; tread carefully here.")
+        out.append("")
+        out.append("| file | commits | bug fixes | churn |")
+        out.append("| --- | ---: | ---: | ---: |")
+        for g in result.gotchas:
+            out.append(f"| {_cell(g.path)} | {g.commits} | {g.bug_commits} | {g.churn:,} |")
+        out.append("")
+    if result.bug_themes:
+        out.append("## Recurring fix themes")
+        out.append("")
+        for word, count in result.bug_themes.items():
+            out.append(f"- {word} (x{count})")
+        out.append("")
+    if result.marker_counts:
+        counted = ", ".join(f"{m} x{n}" for m, n in sorted(result.marker_counts.items()))
+        out.append(f"## Known debt\n\n{counted} markers are haunting the tree.")
+    if len(out) == 3:
+        out.append("Nothing recurs yet; the history is too young to haunt.")
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def render_skill_ownership(result: DistillResult) -> str:
+    """ownership.md: who to ask, or anonymous roles under --anon."""
+    out = [_skill_stamp(result), "# Ownership", ""]
+    if not result.owners:
+        out.append("No souls on record.")
+        return "\n".join(out) + "\n"
+    out.append(f"Bus factor: {result.bus_factor}")
+    out.append("")
+    out.append("| who | commits | +ins | -del | last seen |")
+    out.append("| --- | ---: | ---: | ---: | --- |")
+    for soul in result.owners:
+        who = _cell(soul.name) + (f" <{_cell(soul.email)}>" if soul.email else "")
+        out.append(
+            f"| {who} | {soul.commits} | {soul.insertions:,} "
+            f"| {soul.deletions:,} | {soul.last_seen[:10]} |"
+        )
+    return "\n".join(out) + "\n"

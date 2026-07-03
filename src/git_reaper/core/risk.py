@@ -23,7 +23,7 @@ from git_reaper.schemas import artifact_schema
 LENSES = ("all", "churn", "bugs", "age", "size")
 
 #: Commit messages that smell like a bug being fixed.
-_BUGFIX = re.compile(r"(?i)\b(fix(e[sd])?|bug|defect|fault|hotfix|patch|repair|regression)\b")
+BUGFIX = re.compile(r"(?i)\b(fix(e[sd])?|bug|defect|fault|hotfix|patch|repair|regression)\b")
 
 _DAY = 86400
 #: Recency half-life: a file untouched for 90 days is half as "hot".
@@ -54,7 +54,7 @@ def omens(
     entries: dict[str, Omen] = {}
     last_touch: dict[str, int] = {}
     for commit in commits:
-        is_fix = bool(_BUGFIX.search(commit.subject))
+        is_fix = bool(BUGFIX.search(commit.subject))
         for change in commit.files:
             omen = entries.get(change.path)
             if omen is None:

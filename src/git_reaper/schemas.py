@@ -110,6 +110,7 @@ COMMAND_MODELS: dict[str, type] = {
     "scry": models.ScryResult,
     "plague": models.PlagueResult,
     "necropolis": models.NecropolisResult,
+    "distill": models.DistillResult,
 }
 
 #: Commands with no JSON output of their own (`cast` emits whatever the

@@ -620,6 +620,49 @@ class PlagueResult:
 
 
 @dataclass
+class CommandHint:
+    """One real command lifted from the repo's own tooling files, not guessed."""
+
+    kind: str  # "build", "test", "lint", "format", "run", "docs", or "other"
+    command: str
+    origin: str  # where it was found, e.g. "Makefile", "pyproject.toml"
+
+
+@dataclass
+class Gotcha:
+    """One file that keeps breaking: churn plus bug-fix density."""
+
+    path: str
+    commits: int = 0
+    bug_commits: int = 0
+    churn: int = 0
+
+
+@dataclass
+class DistillResult:
+    """A repo distilled into the facts an Agent Skill bundle is built from."""
+
+    provenance: Provenance
+    name: str
+    profile: str  # "repo", "stack", or "onboarding"
+    description: str = ""
+    languages: list[ExtensionStat] = field(default_factory=list)
+    total_files: int = 0
+    layout: list[str] = field(default_factory=list)  # top-level dirs, e.g. "src/"
+    tooling: list[str] = field(default_factory=list)  # config files found
+    commands: list[CommandHint] = field(default_factory=list)
+    commits_sampled: int = 0
+    commit_prefixes: dict[str, int] = field(default_factory=dict)  # "feat" -> count
+    conventional_share: float = 0.0  # share of commits with a type: prefix
+    gotchas: list[Gotcha] = field(default_factory=list)
+    bug_themes: dict[str, int] = field(default_factory=dict)  # recurring fix words
+    marker_counts: dict[str, int] = field(default_factory=dict)  # TODO/FIXME/...
+    owners: list[Soul] = field(default_factory=list)
+    bus_factor: int = 0
+    bones: BonesResult | None = None
+
+
+@dataclass
 class GraveOutcome:
     """One repo's fate in a necropolis fan-out."""
 
