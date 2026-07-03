@@ -7,37 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **TUI: autopsy, lineage, and veil join the ritual catalog.** The Altar,
-  the incantation console, and `commune` now cover them -- 31 of the CLI's
-  42 commands have a TUI surface. Positional rituals carry their argument as a
-  text option (autopsy's path, lineage's needle, veil's file; relative veil
-  files anchor to the source), and the console learned the CLI's positional
-  grammar: `/autopsy PATH [SOURCE]`, `/lineage NEEDLE --regex`, `/veil FILE`.
-  The headless twin stays true everywhere -- the console's echoed argv and
-  the Grimoire's saved recipes emit real CLI invocations (`autopsy PATH -s
-  SOURCE`; `veil FILE` takes no source), so `cast` runs them unchanged. The
-  necropolis board's fleet Select hides the positional rituals (they want
-  per-grave arguments); `commune` keeps its richer dedicated autopsy/veil
-  tools and gains `lineage` with a required needle.
-
-### Changed
-
-- **TUI: the footer no longer crowds.** The `1`-`6` chamber bindings still
-  jump from anywhere but are hidden from the footer, which used to wrap on
-  binding-heavy chambers; the whole bottom line now belongs to each
-  chamber's own command keys. The doors stay discoverable on the crypt map
-  (escape) and in the Ctrl+P palette.
-
-### Fixed
-
-- **TUI: the Altar's top rows untangled.** Same-edge docked widgets
-  superimpose, so since 0.9.0 the Altar's header sat buried under the
-  source row and the source hint painted over the input's top border. The
-  top stack is now spelled out: header, source row, hint, each on its own
-  line.
-
 ## [0.9.0] - 2026-07-03
 
 Last Rites and the Number of the Bits: the hardening pass and the dream
@@ -117,6 +86,29 @@ feature freeze after this — if it is not in by the bits, it waits for 1.1.
   result-model fields: renaming or removing a field (or dropping a command)
   fails the build until the artifact schema version is bumped deliberately.
   The v1 lock that Ascension (1.0.0) promises starts enforcing here.
+- **TUI: autopsy, lineage, and veil join the ritual catalog.** The Altar,
+  the incantation console, and `commune` now cover them — 31 of the CLI's
+  42 commands have a TUI surface. Positional rituals carry their argument as a
+  text option (autopsy's path, lineage's needle, veil's file; relative veil
+  files anchor to the source), and the console learned the CLI's positional
+  grammar: `/autopsy PATH [SOURCE]`, `/lineage NEEDLE --regex`, `/veil FILE`.
+  The headless twin stays true everywhere — the console's echoed argv and
+  the Grimoire's saved recipes emit real CLI invocations (`autopsy PATH -s
+  SOURCE`; `veil FILE` takes no source), so `cast` runs them unchanged. The
+  necropolis board's fleet Select hides the positional rituals (they want
+  per-grave arguments); `commune` keeps its richer dedicated autopsy/veil
+  tools and gains `lineage` with a required needle.
+- **Docker, Agent Skills, and scripted examples.** Three new top-level
+  folders, each documented in the README and on a new "Agents, Docker, and
+  examples" docs page. `docker/` runs the CLI and the `commune` MCP server
+  in a container (`docker compose up -d reaper-mcp` serves the rituals at
+  `http://localhost:6666/mcp`, guardrails engaged, loopback-bound; a `cli`
+  profile shares the image for one-off runs). `skills/` ships four portable
+  Agent Skills that teach a coding agent the rituals — `reaper-orient`,
+  `reaper-necromancy`, `reaper-audit`, and `reaper-pack` — ready to copy
+  into `.claude/skills/`. `examples/` holds five runnable bash workflows
+  (`orientation.sh`, `audit.sh`, `pack-roundtrip.sh`, `ci-gate.sh`,
+  `fleet.sh`), all honoring the stdout/stderr and exit-3 conventions.
 
 ### Changed
 
@@ -129,6 +121,21 @@ feature freeze after this — if it is not in by the bits, it waits for 1.1.
 - `grimoire` now reports the effective `[ward]` policy and its origin.
 - A recipe whose command is `banshee` is refused like `cast` — the
   recursion would never rest.
+- **TUI: the footer no longer crowds.** The `1`-`6` chamber bindings still
+  jump from anywhere but are hidden from the footer, which used to wrap on
+  binding-heavy chambers; the whole bottom line now belongs to each
+  chamber's own command keys. The doors stay discoverable on the crypt map
+  (escape) and in the Ctrl+P palette.
+- The README wears its badges now (ci, docs, PyPI, Python versions,
+  license), and every section header carries a suitably creepy emoji.
+
+### Fixed
+
+- **TUI: the Altar's top rows untangled.** Same-edge docked widgets
+  superimpose, so the Altar's header sat buried under the source row and
+  the source hint painted over the input's top border (a regression during
+  0.9.0 development; it never shipped). The top stack is now spelled out:
+  header, source row, hint, each on its own line.
 
 ## [0.8.0] - 2026-07-03
 
@@ -530,7 +537,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/jmcmeen/git-reaper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jmcmeen/git-reaper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...v0.6.0
