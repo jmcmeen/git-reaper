@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **TUI: autopsy, lineage, and veil join the ritual catalog.** The Altar,
+  the incantation console, and `commune` now cover them -- 31 of the CLI's
+  42 commands have a TUI surface. Positional rituals carry their argument as a
+  text option (autopsy's path, lineage's needle, veil's file; relative veil
+  files anchor to the source), and the console learned the CLI's positional
+  grammar: `/autopsy PATH [SOURCE]`, `/lineage NEEDLE --regex`, `/veil FILE`.
+  The headless twin stays true everywhere -- the console's echoed argv and
+  the Grimoire's saved recipes emit real CLI invocations (`autopsy PATH -s
+  SOURCE`; `veil FILE` takes no source), so `cast` runs them unchanged. The
+  necropolis board's fleet Select hides the positional rituals (they want
+  per-grave arguments); `commune` keeps its richer dedicated autopsy/veil
+  tools and gains `lineage` with a required needle.
+
 ### Changed
 
 - **TUI: the footer no longer crowds.** The `1`-`6` chamber bindings still
