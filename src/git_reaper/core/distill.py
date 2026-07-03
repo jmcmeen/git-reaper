@@ -35,7 +35,14 @@ from git_reaper.core import skeleton as skeleton_core
 from git_reaper.core.provenance import make_provenance
 from git_reaper.core.risk import BUGFIX
 from git_reaper.gitio import GitBackend, default_backend
-from git_reaper.models import CommandHint, DistillResult, Gotcha, RepoRef, Soul
+from git_reaper.models import (
+    CensusResult,
+    CommandHint,
+    DistillResult,
+    Gotcha,
+    RepoRef,
+    Soul,
+)
 from git_reaper.schemas import artifact_schema
 
 PROFILES = ("repo", "stack", "onboarding")
@@ -185,7 +192,7 @@ def distill(
     return result
 
 
-def _description(name: str, census: census_core.CensusResult, profile: str) -> str:
+def _description(name: str, census: CensusResult, profile: str) -> str:
     tongues = [s.language for s in census.extensions if s.language][:3]
     spoken = "/".join(dict.fromkeys(tongues)) or "mixed"
     if profile == "stack":
@@ -197,7 +204,8 @@ def _description(name: str, census: census_core.CensusResult, profile: str) -> s
 
 def _layout(root: Path) -> list[str]:
     """Top-level entries, dirs first, the hidden and the interred skipped."""
-    dirs, files = [], []
+    dirs: list[str] = []
+    files: list[str] = []
     for entry in sorted(root.iterdir(), key=lambda p: p.name.lower()):
         if entry.name.startswith(".") or entry.name in ("node_modules", "__pycache__"):
             continue
