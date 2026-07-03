@@ -82,7 +82,8 @@ def load_manifest(path: Path) -> list[Grave]:
 
 def derive_name(source: str) -> str:
     """A grave's name from its source: last path segment, .git shroud removed."""
-    tail = source.rstrip("/").rsplit("/", 1)[-1]
+    # Split on either separator: local Windows sources arrive with backslashes.
+    tail = re.split(r"[\\/]", source.rstrip("\\/"))[-1]
     return tail.removesuffix(".git") or "grave"
 
 
