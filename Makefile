@@ -52,4 +52,4 @@ pulse: ## Signs-of-life check via the CLI
 	$(UV) run reaper pulse
 
 summon: ## Summon the reaper (for testing the TUI)
-	$(uv) run reaper summon
+	$(UV) run reaper summon
