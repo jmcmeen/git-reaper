@@ -1,14 +1,8 @@
-"""The Summoning: a Textual TUI over the same core the CLI drives.
+"""The Altar: run a ritual against one source. The original screen, kept.
 
-Thin adapter, same creed as the CLI: pick a source and a ritual, tune its
-options, and the core does the work (on a thread, never blocking the event
-loop). The rendered artifact fills the preview; save writes exactly what you
-see. Textual is only imported here, so the base install stays lean; `reaper
-summon` reports the missing `[tui]` extra clearly.
-
-Dressed in a bespoke `reaper-dracula` theme by default (Dracula hues mapped
-onto the reaper's spooky tokens). Ctrl+P opens Textual's command palette to
-switch themes live.
+The roomy ritual list, the option panel, the preview, the cursed badge --
+one chamber among several now, but the same creed: pick, tune, reap on a
+worker thread, save exactly what you see.
 """
 
 from __future__ import annotations
@@ -18,217 +12,58 @@ from pathlib import Path
 from typing import Any
 
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
-from textual.screen import ModalScreen
-from textual.theme import Theme
+from textual.screen import Screen
 from textual.timer import Timer
+from textual.widget import AwaitMount
 from textual.widgets import (
     Button,
-    DirectoryTree,
     Footer,
     Header,
     Input,
     Label,
     Markdown,
     OptionList,
-    Select,
     Static,
-    Switch,
     TextArea,
 )
 from textual.widgets.option_list import Option
 
-from git_reaper import __version__, art
+from git_reaper import __version__
 from git_reaper.config import GrimoireError, load_grimoire
 from git_reaper.core.source import resolve_source
 from git_reaper.gitio import default_backend
 from git_reaper.models import Recipe
-from git_reaper.tui_ops import (
-    GROUPS,
-    OPERATIONS,
-    OPERATIONS_BY_KEY,
-    ChoiceOpt,
-    NumberOpt,
-    Operation,
-    ReapResult,
-    ToggleOpt,
+from git_reaper.tui.widgets import (
+    BrowseScreen,
+    HelpScreen,
+    SaveScreen,
+    ScytheSpinner,
+    collect_option_values,
+    mount_option_widgets,
 )
+from git_reaper.tui_ops import GROUPS, OPERATIONS, OPERATIONS_BY_KEY, Operation, ReapResult
 
-_SCYTHE = art.SCYTHE_FRAMES
-
-#: Dracula, mapped onto the reaper's semantic tokens (see theme.py's PALETTE:
-#: eldritch->primary purple, necro->success green, blood->error red,
-#: ember->warning orange, plus Dracula cyan/yellow as accent variables).
-REAPER_DRACULA = Theme(
-    name="reaper-dracula",
-    primary="#BD93F9",  # eldritch
-    secondary="#6272A4",
-    accent="#FF79C6",  # pink
-    success="#50FA7B",  # necro
-    warning="#FFB86C",  # ember
-    error="#FF5555",  # blood
-    foreground="#F8F8F2",  # bone
-    background="#282A36",
-    surface="#2B2E3B",
-    panel="#313442",
-    dark=True,
-    variables={
-        "cursed": "#FF5555",
-        "omen": "#F1FA8C",  # dracula yellow
-        "scythe": "#8BE9FD",  # dracula cyan
-        "block-cursor-foreground": "#282A36",
-    },
+_HELP = (
+    "[b]the altar[/b]\n"
+    "  r  reap        s  save        c  copy artifact\n"
+    "  b  browse      /  focus source\n"
+    "  m  raw/rendered markdown\n"
+    "  d  ritual descriptions on/off\n"
+    "  ctrl+p  palette (themes and chambers)\n"
+    "  escape  crypt map\n"
+    "  ?  this help   q  quit\n\n"
+    "[b]rituals[/b]\n"
+    "{groups}\n\n"
+    "rituals marked * need a real repo; plain folders get a clear error."
 )
 
 
-class ScytheSpinner(Static):
-    """A tiny reaping animation with a stage caption, shown while a worker runs."""
+class AltarScreen(Screen[None]):
+    """Run-a-ritual: the Sanctum's original chamber."""
 
-    _timer: Timer | None = None
-
-    def on_mount(self) -> None:
-        self._i = 0
-        self._stage = "reaping"
-        self._timer = None
-        self.display = False
-
-    def start(self, stage: str = "reaping") -> None:
-        self._i = 0
-        self._stage = stage
-        self.display = True
-        if self._timer is None:
-            self._timer = self.set_interval(0.08, self._tick)
-
-    def stage(self, stage: str) -> None:
-        self._stage = stage
-
-    def stop(self) -> None:
-        if self._timer is not None:
-            self._timer.stop()
-            self._timer = None
-        self.display = False
-
-    def _tick(self) -> None:
-        self._i = (self._i + 1) % len(_SCYTHE)
-        self.update(f"[$scythe]{_SCYTHE[self._i]}[/] {self._stage} ...")
-
-
-class SaveScreen(ModalScreen[str | None]):
-    """Ask where to write the artifact. Returns the path, or None on cancel."""
-
-    def __init__(self, default: str) -> None:
-        super().__init__()
-        self._default = default
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Label("inter the artifact at:")
-            yield Input(value=self._default, id="path")
-            with Horizontal(id="dialog-buttons"):
-                yield Button("save", id="ok", variant="primary")
-                yield Button("cancel", id="cancel")
-
-    @on(Button.Pressed, "#ok")
-    def _ok(self) -> None:
-        self.dismiss(self.query_one("#path", Input).value.strip() or None)
-
-    @on(Button.Pressed, "#cancel")
-    def _cancel(self) -> None:
-        self.dismiss(None)
-
-    @on(Input.Submitted, "#path")
-    def _submit(self, event: Input.Submitted) -> None:
-        self.dismiss(event.value.strip() or None)
-
-
-class BrowseScreen(ModalScreen[str | None]):
-    """A directory tree to pick a local source. Returns the path, or None."""
-
-    def __init__(self, start: str = ".") -> None:
-        super().__init__()
-        self._start = start if Path(start).is_dir() else "."
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="browse"):
-            yield Label("choose a crypt to reap:")
-            yield DirectoryTree(self._start, id="tree")
-            with Horizontal(id="dialog-buttons"):
-                yield Button("cancel", id="cancel")
-
-    @on(DirectoryTree.DirectorySelected)
-    def _picked(self, event: DirectoryTree.DirectorySelected) -> None:
-        self.dismiss(str(event.path))
-
-    @on(Button.Pressed, "#cancel")
-    def _cancel(self) -> None:
-        self.dismiss(None)
-
-
-class HelpScreen(ModalScreen[None]):
-    """The keybinding and ritual-group cheatsheet."""
-
-    BINDINGS = [("escape,q,question_mark", "dismiss", "Close")]
-
-    def compose(self) -> ComposeResult:
-        groups = "\n".join(
-            f"  {g}: " + ", ".join(op.key for op in OPERATIONS if op.group == g) for g in GROUPS
-        )
-        body = (
-            "[b]keys[/b]\n"
-            "  r  reap        s  save        c  copy artifact\n"
-            "  b  browse      /  focus source\n"
-            "  m  raw/rendered markdown\n"
-            "  d  ritual descriptions on/off\n"
-            "  ctrl+p  themes (dracula and friends)\n"
-            "  ?  this help   q  quit\n\n"
-            "[b]rituals[/b]\n"
-            f"{groups}\n\n"
-            "rituals marked for git need a real repo; plain folders get a clear error."
-        )
-        with Vertical(id="help"):
-            yield Static(body, id="help-body")
-            yield Button("close", id="close", variant="primary")
-
-    @on(Button.Pressed, "#close")
-    def _close(self) -> None:
-        self.dismiss()
-
-
-class ReaperApp(App[None]):
-    """The reaper's interactive face."""
-
-    TITLE = "git-reaper"
-    CSS = """
-    #source-row { dock: top; height: 3; margin: 0 1; }
-    #source { width: 1fr; }
-    #browse-btn { width: 10; margin-left: 1; }
-    #source-hint { dock: top; height: 1; color: $text-muted; padding: 0 2; }
-    #body { height: 1fr; }
-    #sidebar { width: 42; border-right: solid $primary; }
-    #operations { height: 1fr; }
-    #recipes { height: 8; }
-    #main { height: 1fr; }
-    #ritual-name { height: 1; color: $primary; text-style: bold; padding: 0 1; }
-    #options { height: auto; max-height: 12; border: round $primary; margin: 0 1; padding: 0 1; }
-    .opt-row { height: 3; }
-    .opt-row Label { width: 26; padding: 1 0 0 0; }
-    .opt-toggle { height: 3; }
-    .opt-toggle Label { width: 1fr; padding: 1 0 0 1; }
-    #preview { height: 1fr; border: round $primary; }
-    #rendered { height: 1fr; border: round $primary; display: none; }
-    #spinner { height: 1; color: $warning; padding: 0 1; }
-    #statusbar { height: 1; padding: 0 1; }
-    #status { width: 1fr; color: $text-muted; }
-    #badge { color: $background; background: $error; text-style: bold; padding: 0 1; display: none }
-    .heading { text-style: bold; padding: 1 1 0 1; }
-    #reap { margin: 1 1; width: 100%; }
-    #dialog { padding: 1 2; width: 64; height: auto; border: round $primary; background: $surface; }
-    #browse { padding: 1 2; width: 80; height: 30; border: round $primary; background: $surface; }
-    #help { padding: 1 2; width: 76; height: auto; border: round $primary; background: $surface; }
-    #tree { height: 1fr; }
-    """
     BINDINGS = [
         ("r", "reap", "Reap"),
         ("s", "save", "Save"),
@@ -238,12 +73,12 @@ class ReaperApp(App[None]):
         ("m", "toggle_rendered", "Raw/rendered"),
         ("d", "toggle_descriptions", "Descriptions"),
         ("question_mark", "help", "Help"),
-        ("q", "quit", "Quit"),
+        ("escape", "app.crypt", "Crypt map"),
+        ("q", "app.quit", "Quit"),
     ]
 
-    def __init__(self, source: str = ".") -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._initial_source = source
         self.current_op: Operation = OPERATIONS[0]
         self._artifact: str = ""
         self._last_format: str = "md"
@@ -251,12 +86,13 @@ class ReaperApp(App[None]):
         self._recipes: list[Recipe] = []
         self._inspect_timer: Timer | None = None
         self._show_descriptions: bool = False
+        self._options_ready: AwaitMount | None = None
         self._is_repo: bool = True  # last inspected source; repopulating regrays from this
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         with Horizontal(id="source-row"):
-            yield Input(value=self._initial_source, placeholder="path or repo URL", id="source")
+            yield Input(placeholder="path or repo URL", id="source")
             yield Button("browse", id="browse-btn")
         yield Label("", id="source-hint")
         with Horizontal(id="body"):
@@ -279,12 +115,15 @@ class ReaperApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.register_theme(REAPER_DRACULA)
-        self.theme = "reaper-dracula"
+        self.query_one("#source", Input).value = self.app.source  # type: ignore[attr-defined]
         self._populate_operations()
         self._build_options()
         self._load_recipes()
-        self._inspect_source(self._initial_source)
+        self._inspect_source(self.query_one("#source", Input).value)
+
+    def on_screen_resume(self) -> None:
+        self.app.sub_title = "the altar"
+        self._load_recipes()  # the Grimoire may have inscribed new ones
 
     # -- ritual list -------------------------------------------------------
 
@@ -309,7 +148,10 @@ class ReaperApp(App[None]):
             self._recipes = load_grimoire().recipes
         except GrimoireError:
             self._recipes = []
-        recipes = self.query_one("#recipes", OptionList)
+        try:
+            recipes = self.query_one("#recipes", OptionList)
+        except NoMatches:  # resume can fire before compose settles
+            return
         recipes.clear_options()
         if not self._recipes:
             recipes.add_option(Option("(no recipes inscribed)", disabled=True))
@@ -321,55 +163,11 @@ class ReaperApp(App[None]):
     # -- options panel -----------------------------------------------------
 
     def _build_options(self) -> None:
-        """Rebuild the options panel for the current ritual."""
         panel = self.query_one("#options", VerticalScroll)
-        panel.remove_children()
-        if not self.current_op.options:
-            panel.mount(Label("no options - reap with r", classes="opt-row"))
-            return
-        for spec in self.current_op.options:
-            if isinstance(spec, ToggleOpt):
-                row = Horizontal(
-                    Switch(value=spec.default, id=f"opt-{spec.name}"),
-                    Label(spec.label),
-                    classes="opt-toggle",
-                )
-            elif isinstance(spec, ChoiceOpt):
-                row = Horizontal(
-                    Label(spec.label),
-                    Select(
-                        [(c, c) for c in spec.choices],
-                        value=spec.default,
-                        allow_blank=False,
-                        id=f"opt-{spec.name}",
-                    ),
-                    classes="opt-row",
-                )
-            else:  # NumberOpt or TextOpt
-                default = "" if getattr(spec, "default", None) is None else str(spec.default)
-                row = Horizontal(
-                    Label(spec.label),
-                    Input(
-                        value=default,
-                        type="integer" if isinstance(spec, NumberOpt) else "text",
-                        id=f"opt-{spec.name}",
-                    ),
-                    classes="opt-row",
-                )
-            panel.mount(row)
+        self._options_ready = mount_option_widgets(panel, self.current_op)
 
     def _collect_opts(self) -> dict[str, Any]:
-        """Read the current option widgets into a plain dict for the worker."""
-        opts: dict[str, Any] = {}
-        for spec in self.current_op.options:
-            widget = self.query_one(f"#opt-{spec.name}")
-            value = widget.value  # type: ignore[attr-defined]
-            if isinstance(spec, NumberOpt):
-                text = str(value).strip()
-                opts[spec.name] = int(text) if text.lstrip("-").isdigit() else None
-            else:
-                opts[spec.name] = value
-        return opts
+        return collect_option_values(self, self.current_op)
 
     # -- selection ---------------------------------------------------------
 
@@ -406,7 +204,7 @@ class ReaperApp(App[None]):
             self._apply_operation(OPERATIONS_BY_KEY[key])
 
     @on(OptionList.OptionSelected, "#recipes")
-    def _recipe_selected(self, event: OptionList.OptionSelected) -> None:
+    async def _recipe_selected(self, event: OptionList.OptionSelected) -> None:
         if not self._recipes or event.option.id is None:
             return
         recipe = self._recipes[int(event.option.id.split(":")[1])]
@@ -414,8 +212,9 @@ class ReaperApp(App[None]):
         self.query_one("#source", Input).value = source
         if recipe.command in OPERATIONS_BY_KEY:
             self.set_operation(recipe.command)
-            # the options panel mounts on the next refresh; apply flags after it.
-            self.call_after_refresh(self._apply_recipe_options, recipe)
+            if self._options_ready is not None:
+                await self._options_ready  # the panel must exist before the flags land
+            self._apply_recipe_options(recipe)
         incantation = " ".join(["reaper", recipe.command, *recipe.args])
         self._status(f"loaded {recipe.name}: {incantation}  (press r to reap)")
 
@@ -463,6 +262,7 @@ class ReaperApp(App[None]):
 
     @on(Input.Changed, "#source")
     def _source_changed(self, event: Input.Changed) -> None:
+        self.app.source = event.value.strip() or "."  # type: ignore[attr-defined]
         if self._inspect_timer is not None:
             self._inspect_timer.stop()
         self._inspect_timer = self.set_timer(0.4, lambda: self._inspect_source(event.value))
@@ -483,11 +283,11 @@ class ReaperApp(App[None]):
     def _inspect_worker(self, source: str) -> None:
         path = Path(source).expanduser()
         if not path.exists():
-            self.call_from_thread(self._show_source_state, f"no such path: {source}", False)
+            self.app.call_from_thread(self._show_source_state, f"no such path: {source}", False)
             return
         is_repo = default_backend().is_repo(path)
         note = "git repo" if is_repo else "plain folder (history rituals will fail)"
-        self.call_from_thread(self._show_source_state, note, is_repo)
+        self.app.call_from_thread(self._show_source_state, note, is_repo)
 
     def _show_source_state(self, note: str, is_repo: bool) -> None:
         # a thread callback can land after a modal opens or the app stops;
@@ -546,16 +346,16 @@ class ReaperApp(App[None]):
     def _reap_worker(self, source: str, op: Operation, opts: dict[str, Any]) -> None:
         try:
             resolved = resolve_source(source, depth=None)
-            self.call_from_thread(self.query_one(ScytheSpinner).stage, f"reaping {op.key}")
+            self.app.call_from_thread(self.query_one(ScytheSpinner).stage, f"reaping {op.key}")
             result = op.run(resolved.repo, opts)
         except Exception as exc:  # surface the plain cause; never hide it
-            self.call_from_thread(self._show_error, str(exc))
+            self.app.call_from_thread(self._show_error, str(exc))
             return
-        self.call_from_thread(self._show_result, op.key, result, opts.get("format", "md"))
+        self.app.call_from_thread(self._show_result, op.key, result, opts.get("format", "md"))
 
     def action_browse(self) -> None:
         current = self.query_one("#source", Input).value.strip() or "."
-        self.push_screen(BrowseScreen(current), self._chose_source)
+        self.app.push_screen(BrowseScreen(current), self._chose_source)
 
     def _chose_source(self, path: str | None) -> None:
         if path:
@@ -569,11 +369,14 @@ class ReaperApp(App[None]):
         if not self._artifact:
             self.notify("nothing reaped yet", severity="warning")
             return
-        self.copy_to_clipboard(self._artifact)
+        self.app.copy_to_clipboard(self._artifact)
         self.notify("artifact copied to the clipboard")
 
     def action_help(self) -> None:
-        self.push_screen(HelpScreen())
+        groups = "\n".join(
+            f"  {g}: " + ", ".join(op.key for op in OPERATIONS if op.group == g) for g in GROUPS
+        )
+        self.app.push_screen(HelpScreen(_HELP.format(groups=groups)))
 
     def action_toggle_rendered(self) -> None:
         if self._last_format != "md":
@@ -589,7 +392,7 @@ class ReaperApp(App[None]):
         ext = {"md": ".md", "json": ".json", "csv": ".csv", "html": ".html"}.get(
             self._last_format, ".md"
         )
-        self.push_screen(SaveScreen(f"{self.current_op.key}{ext}"), self._write_artifact)
+        self.app.push_screen(SaveScreen(f"{self.current_op.key}{ext}"), self._write_artifact)
 
     def _write_artifact(self, path: str | None) -> None:
         if not path:
@@ -642,8 +445,3 @@ class ReaperApp(App[None]):
 
     def _badge_off(self) -> None:
         self.query_one("#badge", Static).display = False
-
-
-def run_tui(source: str = ".") -> None:
-    """Launch the TUI. Called by `reaper summon`."""
-    ReaperApp(source=source).run()

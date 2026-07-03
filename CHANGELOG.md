@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-03
+
+The Sanctum: one good screen becomes a workbench of chambers.
+
+### Added
+
+- **The Sanctum.** `reaper summon` now opens on a crypt-map home screen
+  with six chambers as doors (Textual's Screen API). Chambers keep their
+  state while you roam; number keys jump, escape returns to the map, and
+  Ctrl+P's palette knows every door alongside the themes. Every chamber
+  drives the same `tui_ops` registry and typed core -- still no logic
+  outside the library, and nothing done in the Sanctum is TUI-trapped.
+- **The Altar.** The original run-a-ritual screen, kept whole: the roomy
+  list and `d` toggle, options panel, preview, cursed badge, save.
+- **The Grimoire (recipe builder).** Compose a recipe visually with the
+  same option widgets the Altar renders, watch the exact CLI invocation
+  update live, and save: `config.save_recipe` inscribes it in `.reaperrc`
+  with line-level section surgery (comments elsewhere survive), so it
+  round-trips with `cast`. Existing recipes load back into the form
+  (parsed by the console's own brain) and delete cleanly; pyproject
+  recipes are shown but honestly point back at the file they live in.
+- **The Incantation console.** A REPL over the rituals: `/` summons a
+  fuzzy menu (prefix, substring, then subsequence), the help line
+  validates flags as you type, Enter runs the line on a worker thread,
+  and up/down recalls history. Every accepted line is a real, reproducible
+  `reaper` argv, shown with its artifact. Meta commands: `/help`,
+  `/recipes`, `/theme`, `/clear`, `/save`. The parser lives in the new
+  textual-free `incant` module, tested without the `[tui]` extra.
+- **The Necropolis board.** Load a `necropolis.toml` (the same manifest
+  the CLI fans out over), pick a ritual, reap the fleet: per-grave fates
+  update live (rest in peace / CURSED / the plain failure), and selecting
+  a row drops that grave's artifact into the preview.
+- **The Reliquary.** One triage pass unifying `exhume`, `omens`, `plague`
+  (offline), and `rot`, merged onto one slab sorted most-cursed first,
+  with masked previews and one-key markdown export. A ritual that fails
+  (plain folder, no manifests) contributes an error line, never a crash.
+- **The Seance table.** The souls heatmap, the chronicle, and a two-ref
+  scry in one view: select an hour on the heatmap to see that hour's
+  commits (in the commit's recorded timezone, via the newly public
+  `history.weekday_hour`), select a commit for its full story.
+- **The headless twin, everywhere.** New `tui_ops.incantation_args` maps
+  any chamber's option values to their exact CLI flags -- the Grimoire's
+  recipes and the console's argv both come from it, so what the Sanctum
+  shows is what the shell would run.
+
+### Changed
+
+- `git_reaper.tui` is now a package (app, widgets, one module per
+  chamber); `run_tui` and every screen stay importable from
+  `git_reaper.tui`. Textual remains confined to the `[tui]` extra.
+
 ## [0.7.0] - 2026-07-03
 
 The Apprentice: the reaper teaches what it has learned.
@@ -356,7 +407,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/jmcmeen/git-reaper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jmcmeen/git-reaper/compare/v0.4.0...v0.5.0

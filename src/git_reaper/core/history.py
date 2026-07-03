@@ -169,12 +169,16 @@ def souls(
 
 
 def _weekday_hour(commit: GitCommit) -> tuple[int, int]:
+    return weekday_hour(commit.author_date)
+
+
+def weekday_hour(iso: str) -> tuple[int, int]:
     """Weekday (0=Mon) and hour in the commit's *recorded* timezone.
 
     Parsed from strict-ISO (e.g. 2026-07-02T02:00:00-04:00) so the grid never
-    depends on the machine that runs the reaper.
+    depends on the machine that runs the reaper. Public because the Seance
+    chamber maps heatmap cells back to the commits that lit them.
     """
-    iso = commit.author_date
     # ...THH:MM:SS<offset>; take the wall-clock hour as recorded.
     hour = int(iso[11:13]) if len(iso) >= 13 else 0
     weekday = _iso_weekday(iso)
