@@ -191,6 +191,29 @@ pip install "git-reaper[all]"      # everything
 Third-party "rituals" extend the CLI through the `git_reaper.rituals` entry
 point: a package that registers a Typer sub-app appears as `reaper <name>`.
 
+## Agents, Docker, and examples
+
+Three ready-made ways in, each in its own folder:
+
+- **[docker/](docker/)** — a `Dockerfile` and `docker-compose.yml` that run
+  the CLI and the `commune` MCP server in a container:
+  `docker compose up -d reaper-mcp` serves every read-only ritual to agents
+  at `http://localhost:6666/mcp`, rooted to a mounted `/repos`, guardrails
+  engaged. One-off CLI runs share the image:
+  `docker compose run --rm reaper tombstone /repos/some-repo`.
+- **[skills/](skills/)** — portable Agent Skills that teach a coding agent
+  the rituals: `reaper-orient` (map an unfamiliar repo), `reaper-necromancy`
+  (history mining), `reaper-audit` (secrets, risk, gating), and
+  `reaper-pack` (LLM context packing). Copy a folder into your agent's
+  skills directory (for Claude Code, `.claude/skills/`) and it triggers on
+  the matching questions. Not to be confused with `reaper distill`, which
+  *generates* a repo-specific skill from any codebase.
+- **[examples/](examples/)** — scripted end-to-end workflows in plain bash:
+  `orientation.sh` (first contact with a repo), `audit.sh` (the full sweep,
+  CI-ready exit codes), `pack-roundtrip.sh` (conjure, reanimate `--verify`,
+  byte-compare), `ci-gate.sh` (one-line `ward` gate), and `fleet.sh`
+  (necropolis fan-out). Each takes a path or remote URL.
+
 ## Behavior you can rely on
 
 - **Artifacts to stdout (or `--out`); narration to stderr.** Piping is always safe.
