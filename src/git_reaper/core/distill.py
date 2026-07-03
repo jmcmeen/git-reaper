@@ -15,6 +15,7 @@ tell when the code has moved on and the skill has started to lie.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -101,7 +102,8 @@ class SkillStamp:
 
 def derive_name(repo: RepoRef) -> str:
     """A skill's name from its source: the directory or repo it was reaped from."""
-    tail = repo.source.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+    # Split on either separator: local Windows sources arrive with backslashes.
+    tail = re.split(r"[\\/]", repo.source.rstrip("\\/"))[-1].removesuffix(".git")
     if tail in ("", "."):
         tail = Path(repo.path).name
     return tail or "skill"
@@ -416,7 +418,11 @@ def polish_bundle(bundle: dict[str, str], command: str) -> dict[str, str]:
     a local model, `fmt`. Frontmatter and the provenance stamp are held
     back and reattached: a polisher may smooth prose, never facts of origin.
     """
-    argv = shlex.split(command)
+    # POSIX shlex would eat the backslashes in a Windows path; split natively.
+    if os.name == "nt":
+        argv = [token.strip('"') for token in shlex.split(command, posix=False)]
+    else:
+        argv = shlex.split(command)
     if not argv:
         raise SkillError("--polish needs a command that reads stdin and writes stdout")
     polished: dict[str, str] = {}
