@@ -570,6 +570,37 @@ def test_necropolis_board_reaps_the_fleet(necropolis, tmp_path, monkeypatch):
     asyncio.run(scenario())
 
 
+def test_necropolis_board_gives_each_grave_its_own_crypt(make_repo, tmp_path, monkeypatch):
+    # Two graves whose skills share a folder name: a shared out dir would let
+    # omega's loot refresh-clobber alpha's. Each grave gets its own bundle.
+    skill = "---\nname: tool\ndescription: From {0}.\n---\n{0}'s\n"
+    alpha = make_repo({"skills/tool/SKILL.md": skill.format("alpha")}, name="alpha")
+    omega = make_repo({"skills/tool/SKILL.md": skill.format("omega")}, name="omega")
+    manifest = tmp_path / "necropolis.toml"
+    manifest.write_text(
+        f"[[grave]]\nsource = '{alpha}'\n\n[[grave]]\nsource = '{omega}'\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+
+    async def scenario() -> None:
+        app = ReaperApp(source=".")
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            board = await _enter(app, pilot, "necropolis")
+            board.query_one("#fleet-ritual", Select).value = "scavenge"
+            board.action_reap_fleet()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            crypt = tmp_path / "skill-crypt"
+            alpha_loot = (crypt / "alpha/tool/SKILL.md").read_text(encoding="utf-8")
+            omega_loot = (crypt / "omega/tool/SKILL.md").read_text(encoding="utf-8")
+            assert alpha_loot.endswith("alpha's\n") and omega_loot.endswith("omega's\n")
+            table = board.query_one("#graves", DataTable)
+            assert "1 skills interred" in str(table.get_cell("alpha", "summary"))
+
+    asyncio.run(scenario())
+
+
 # -- the reliquary ------------------------------------------------------------------
 
 

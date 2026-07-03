@@ -131,7 +131,13 @@ class NecropolisScreen(Screen[None]):
             self.app.call_from_thread(self.query_one(ScytheSpinner).stage, f"reaping {grave.name}")
             try:
                 resolved = resolve_source(grave.source, depth=None)
-                result = op.run(resolved.repo, op.defaults())
+                opts = op.defaults()
+                if "out" in opts:
+                    # Writing rituals get one bundle per grave, exactly as the
+                    # CLI fan-out does -- a shared out dir would let one
+                    # grave's loot refresh-clobber another's.
+                    opts["out"] = str(Path(str(opts["out"])) / grave.name)
+                result = op.run(resolved.repo, opts)
             except Exception as exc:  # a grave must never take the fleet down
                 failed += 1
                 self.app.call_from_thread(self._update_row, grave.name, "failed", str(exc), None)

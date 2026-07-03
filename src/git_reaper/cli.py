@@ -44,6 +44,7 @@ from git_reaper.core import revenant as revenant_core
 from git_reaper.core import risk as risk_core
 from git_reaper.core import rules as rules_core
 from git_reaper.core import scan as scan_core
+from git_reaper.core import scavenge as scavenge_core
 from git_reaper.core import scry as scry_core
 from git_reaper.core import skeleton as skeleton_core
 from git_reaper.core import tree as tree_core
@@ -1365,6 +1366,46 @@ def _distill_check(skill_dir: Path) -> None:
     _say("blood", f"stale: distilled at {stamp.sha[:7]}, {stamp.source} is now at {current[:7]}")
     _say("ash", f"re-run `reaper distill {stamp.source} --out {skill_dir}`")
     raise typer.Exit(code=CURSED)
+
+
+@app.command("scavenge")
+def scavenge_cmd(
+    source: str = typer.Argument(".", help="Local path or repo URL."),
+    out: Path = typer.Option(
+        Path("skill-crypt"), "--out", "-o", help="Library directory the loot lands in."
+    ),
+    exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
+    ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha (remote sources)."),
+    depth: int = typer.Option(1, "--depth", help="Clone depth for remote sources."),
+    fmt: str = typer.Option("md", "--format", "-f", help="md, or json to also print the result."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Scavenge existing Agent Skill folders out of a repo into a library.
+
+    Every folder holding a SKILL.md is taken whole - references, scripts,
+    binary assets and all - and a routing SKILL.md at the library root
+    indexes the loot. Re-scavenging refreshes; nothing found writes nothing.
+    """
+    if schema:
+        _print_schema("scavenge")
+        return
+    _validate_format(fmt)
+    _banner()
+    resolved = _resolve(source, ref=ref, depth=depth)
+    result = scavenge_core.scavenge(resolved.repo, out, excludes=exclude, invoked=_invocation())
+    if not result.skills:
+        _say("ember", f"no {scavenge_core.MARKER} anywhere in {source}; the graves were empty")
+    else:
+        for skill in result.skills:
+            _say("necro", f"scavenged {skill.path} -> {out / skill.name}  ({skill.files} files)")
+        _say(
+            "bone",
+            f"{len(result.skills)} skill(s) interred in {out}; "
+            f"the routing index is {out / scavenge_core.MARKER}",
+        )
+    _say("ash", "the scavenging is complete.")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), None)
 
 
 # --------------------------------------------------------------------------

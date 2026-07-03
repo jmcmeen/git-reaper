@@ -35,6 +35,8 @@ POSITIONALS: dict[str, dict[str, str]] = {
 def _run(op: tui_ops.Operation, root: Path, **overrides: object) -> tui_ops.ReapResult:
     opts = op.defaults()
     opts.update(POSITIONALS.get(op.key, {}))
+    if "out" in opts:  # writing rituals land in the throwaway tree, never the cwd
+        opts["out"] = str(root.parent / f"{op.key}-out")
     opts.update(overrides)
     return op.run(ref(root), opts)
 
@@ -64,6 +66,8 @@ def test_each_operation_renders_its_own_artifact(necropolis):
             assert "git-reaper harvest" in result.text  # harvest has no schema line
         elif op.key == "veil":
             assert "# hi" in result.text  # the scrubbed artifact itself, no banner
+        elif op.key == "scavenge":
+            assert "nothing was written" in result.text  # the fixture holds no skills
         else:
             assert f"schema:    {op.key}/v1" in result.text, op.key
 

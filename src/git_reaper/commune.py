@@ -9,9 +9,10 @@ core does the work.
 
 Guardrails, all opt-in to loosen:
 
-- Read-only by default; `resurrect`, `reanimate`, and `banish` appear only
-  with allow_write. `veil` is always available: it scrubs text in flight and
-  touches no disk.
+- Read-only by default; `resurrect`, `reanimate`, `banish`, and `scavenge`
+  appear only with allow_write (and what scavenge writes must land inside
+  the allowed roots). `veil` is always available: it scrubs text in flight
+  and touches no disk.
 - Offline by default; `plague` is forced to manifest parsing unless
   allow_network.
 - Rooted: an agent may only reap local paths under the allowed roots and
@@ -139,6 +140,9 @@ class Communion:
                 opts["format"] = "json"
             if op.key == "plague" and not self.guard.allow_network:
                 opts["offline"] = True  # the crypt stays sealed
+            if op.writes:  # what it writes must land inside the circle
+                out = Path(str(opts.get("out") or ".")).expanduser().resolve()
+                self.guard.check(str(out))
             with tui_ops.invoker("reaper commune"):
                 return op.run(repo, opts).text
 
@@ -220,12 +224,16 @@ class Communion:
             if op.key in ("autopsy", "veil"):
                 continue  # the dedicated tools below are richer: required
                 # args for autopsy, raw text (no disk) for veil
+            if op.writes and not self.guard.allow_write:
+                continue  # writing rituals stay hidden without --allow-write
             props: dict[str, Any] = {"source": _source_property(self.default_source)}
             for opt in op.options:
                 if opt.name == "format":
                     continue  # tools always return JSON; formats are a human thing
                 props[opt.name] = _opt_schema(opt)
             note = " Needs git history." if op.needs_git else ""
+            if op.writes:
+                note += " (write)"
             schema: dict[str, Any] = {"type": "object", "properties": props}
             if op.positional:
                 schema["required"] = [op.positional]

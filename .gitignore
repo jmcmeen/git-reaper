@@ -235,3 +235,5 @@ src/git_reaper/_version.py
 /examples/fleet-report
 /examples/orientation-report
 /examples/pack-roundtrip
+/skill-crypt
+/examples/skill-crypt

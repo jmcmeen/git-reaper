@@ -368,6 +368,34 @@ reaper distill . --polish "claude -p 'tighten this prose'"
 At fleet scale, `reaper necropolis distill` writes one skill per grave
 plus a routing index skill at the library's root.
 
+### scavenge
+
+The scavenger: where `distill` writes a new skill from what it learns,
+`scavenge` steals the ones already interred. Every folder holding a
+`SKILL.md` is lifted whole -- prose, `reference/` files, scripts, binary
+assets, byte for byte -- and reburied in a library directory (default
+`skill-crypt/`), with a routing `SKILL.md` at the root that indexes the
+loot, so the crypt itself is loadable. Ignore rules hold on the way out:
+a gitignored skill folder is never found, and ignored files inside a
+taken folder stay buried.
+
+Topmost wins (a `SKILL.md` nested inside another skill's folder rides
+along instead of being lifted twice), two skills sharing a folder name
+are numbered instead of clobbered, and re-scavenging refreshes the same
+folders rather than accumulating copies. A repo whose root holds the
+`SKILL.md` is taken whole under the source's name. Finding nothing
+writes nothing.
+
+```sh
+reaper scavenge https://github.com/anthropics/skills --out skill-crypt/
+reaper scavenge . -x "vendor/*" --format json | jq '.skills[].path'
+reaper necropolis scavenge --org my-org --out-dir crypt/   # a fleet's loot
+```
+
+At fleet scale, `reaper necropolis scavenge` gives each grave its own crypt
+and a fleet-level routing skill above them: two levels of index, both
+readable by an agent.
+
 ### necropolis
 
 Fan any source-taking reaper command across every grave in a
@@ -571,7 +599,7 @@ reaper summon .            # prefill the source
   `scry` ref-versus-ref picker in one view.
 
 The ritual catalog (shared by the Altar, the console, and `commune`), grouped
-as in the sidebar: *reaping* (limbs, harvest), *packing* (conjure, census,
+as in the sidebar: *reaping* (limbs, harvest, scavenge), *packing* (conjure, census,
 unfinished, bones), *necromancy* (chronicle, souls, haunt, autopsy, graveyard,
 rot, ghosts, tombstone, wake, possession, revenant, lineage), *forensics*
 (doppelgangers, bloat), and *dark arts* (exhume, veil, omens, plague,
@@ -585,7 +613,9 @@ previews stay masked.
 
 The commands that write to disk (`reanimate`, `resurrect`, `leech`) or that
 emit artifacts rather than reports (`embalm`, `effigy`, `distill`) stay
-CLI-only, along with `pulse`, `banish`, and `banshee`. Everything else has a
+CLI-only, along with `pulse`, `banish`, and `banshee`. The one exception is
+`scavenge`, which both writes (the library fills as you reap) and reports
+(the preview is the routing index it just wrote). Everything else has a
 chamber: `scry` sits at the Seance table, the Necropolis board drives the
 fleet, and the Grimoire chamber and the Altar's recipe list cover `grimoire`
 and `cast`.
@@ -614,11 +644,12 @@ reaper commune . --allow-write       # let a trusted agent resurrect/banish
   repeatable; defaults to the launch source) and remote URLs on an allowed
   host (`--host`). An agent cannot point the reaper at arbitrary disk.
 - **Read-only by default.** The writing rituals -- `resurrect`, `reanimate`
-  (whose target must land inside the allowed roots), and `banish` -- appear
-  only with `--allow-write`. `veil` is always available: it scrubs artifact
-  text in flight and touches no disk. `plague` is forced to offline manifest
-  parsing unless `--allow-network`. `exhume` returns the same masked previews
-  it prints anywhere else -- a full secret never crosses the wire.
+  and `scavenge` (whose targets must land inside the allowed roots), and
+  `banish` -- appear only with `--allow-write`. `veil` is always available:
+  it scrubs artifact text in flight and touches no disk. `plague` is forced
+  to offline manifest parsing unless `--allow-network`. `exhume` returns the
+  same masked previews it prints anywhere else -- a full secret never
+  crosses the wire.
 - **Resources and prompts.** The effective grimoire, tombstone, and census
   are published as MCP resources; `pack-this-repo`, `audit-this-repo`, and
   `explain-this-repo` prompts give an agent a sane default workflow.

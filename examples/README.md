@@ -12,6 +12,7 @@ remote URL** as the source.
 | [pack-roundtrip.sh](pack-roundtrip.sh) | Pack and prove it: `census` to size, `conjure --sha256` to pack, `reanimate --verify` to raise the tree elsewhere, then byte-compare every risen file. |
 | [ci-gate.sh](ci-gate.sh) | The one-line repo-health gate: `reaper ward` runs the whole `[ward]` policy and exits 3 when any check breaks. |
 | [fleet.sh](fleet.sh) | Fleet reaping: write a `necropolis.toml` manifest and fan a ritual across every grave, one artifact per repo plus a combined index. |
+| [skill-harvest.sh](skill-harvest.sh) | Skill scraping from primitives: find every Agent Skill folder (`limbs --format json`), pack the repo (`conjure --sha256`), raise it elsewhere (`reanimate --verify`), and lift each skill into a reusable library with an `INDEX.md`. (`reaper scavenge` now does this in one command; the script shows the composition.) |
 
 ## Running them
 
@@ -23,6 +24,7 @@ cd examples
 ./pack-roundtrip.sh ..                          # pack the parent, verify the rise
 ./ci-gate.sh .
 ./fleet.sh fleet-report . ../some-other-repo
+./skill-harvest.sh skill-crypt .. https://github.com/anthropics/skills
 ```
 
 All scripts need `reaper` on PATH (`pip install git-reaper` or
