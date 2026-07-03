@@ -663,6 +663,25 @@ class DistillResult:
 
 
 @dataclass
+class ScavengedSkill:
+    """One skill folder lifted whole from the source."""
+
+    name: str  # folder name in the crypt (numbered when two loots collide)
+    path: str  # original folder, relative to the source root ("." for the root)
+    description: str = ""  # its own frontmatter description line
+    files: int = 0
+
+
+@dataclass
+class ScavengeResult:
+    """Existing Agent Skill folders scavenged into a library directory."""
+
+    provenance: Provenance
+    out: str
+    skills: list[ScavengedSkill] = field(default_factory=list)
+
+
+@dataclass
 class GraveOutcome:
     """One repo's fate in a necropolis fan-out."""
 

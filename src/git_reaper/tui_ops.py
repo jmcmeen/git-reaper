@@ -10,7 +10,8 @@ Only source-driven, viewable rituals appear here -- the ones that take a
 repo/folder and produce a report. Commands that need extra positional
 arguments (scry's two refs, autopsy/resurrect a path, reanimate artifacts,
 veil a file) or are meta (grimoire, cast, banish, pulse, necropolis) stay
-CLI-only.
+CLI-only. A ritual that also writes (scavenge fills a library directory)
+carries `writes=True` so commune can gate it behind --allow-write.
 
 Each ritual declares its options (a textual-free spec the TUI renders into
 widgets) and returns a ReapResult carrying the rendered text plus a one-line
@@ -45,6 +46,7 @@ from git_reaper.core import revenant as revenant_core
 from git_reaper.core import risk as risk_core
 from git_reaper.core import rules as rules_core
 from git_reaper.core import scan as scan_core
+from git_reaper.core import scavenge as scavenge_core
 from git_reaper.core import skeleton as skeleton_core
 from git_reaper.core import tree as tree_core
 from git_reaper.core import wake as wake_core
@@ -131,6 +133,10 @@ class Operation:
     #: "flag" (reaper KEY POS -s SOURCE), or "none" (veil reads a file; the
     #: TUI's source only anchors relative paths).
     source_arg: str = "positional"
+    #: True for rituals that write outside their artifact text (scavenge fills
+    #: a library directory). Commune hides these without --allow-write and
+    #: guard-checks their "out" option, so a writing op must declare one.
+    writes: bool = False
 
     @property
     def label(self) -> str:
@@ -199,6 +205,22 @@ def _conjure(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     result = pack_core.conjure(repo, invoked=_invoked("conjure"))
     text = "".join(part for _number, part in pack_core.iter_parts(result))
     return ReapResult(text, f"{len(result.files)} files, ~{result.token_estimate:,} tokens")
+
+
+def _scavenge(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    out_dir = Path(str(opts.get("out") or "").strip() or "skill-crypt")
+    result = scavenge_core.scavenge(repo, out_dir, invoked=_invoked("scavenge"))
+    if not result.skills:
+        summary = "the graves were empty"
+        text = f"No {scavenge_core.MARKER} anywhere in the source; nothing was written.\n"
+    else:
+        summary = f"{len(result.skills)} skills interred in {out_dir}"
+        # The artifact is the routing index the scavenge just wrote: the loot,
+        # exactly as an agent will read it.
+        text = scavenge_core.render_crypt_skill(result, out_dir)
+    if opts["format"] == "json":
+        text = jsonfmt.render(result)
+    return ReapResult(text, summary)
 
 
 def _census(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
@@ -464,6 +486,18 @@ OPERATIONS: list[Operation] = [
         (_format_opt("md", "json"),),
     ),
     Operation("harvest", "gather *.md into one artifact", "reaping", False, _harvest),
+    Operation(
+        "scavenge",
+        "steal skill folders into a library",
+        "reaping",
+        False,
+        _scavenge,
+        (
+            TextOpt("out", "out (the library directory)", default="skill-crypt"),
+            _format_opt("md", "json"),
+        ),
+        writes=True,
+    ),
     Operation("conjure", "bundle the repo for an LLM", "packing", False, _conjure),
     Operation(
         "census",

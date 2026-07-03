@@ -111,6 +111,7 @@ COMMAND_MODELS: dict[str, type] = {
     "plague": models.PlagueResult,
     "necropolis": models.NecropolisResult,
     "distill": models.DistillResult,
+    "scavenge": models.ScavengeResult,
     "ward": models.WardResult,
     "leech": models.LeechResult,
     "embalm": models.EmbalmResult,

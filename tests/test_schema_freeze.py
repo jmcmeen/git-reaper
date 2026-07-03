@@ -127,6 +127,7 @@ FROZEN_FIELDS: dict[str, set[str]] = {
         "bus_factor",
         "bones",
     },
+    "scavenge": {"provenance", "out", "skills"},
     "ward": {"provenance", "checks", "policy_source"},
     "leech": {"provenance", "input", "out", "blocks", "skipped"},
     "embalm": {"provenance", "out", "files", "total_bytes", "archive_sha256"},

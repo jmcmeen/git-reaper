@@ -30,13 +30,14 @@ def communion(make_history) -> commune.Communion:
 
 
 def test_catalog_covers_every_source_ritual(communion: commune.Communion):
-    expected = {op.key for op in tui_ops.OPERATIONS} | {"autopsy", "scry", "grimoire", "veil"}
+    readers = {op.key for op in tui_ops.OPERATIONS if not op.writes}
+    expected = readers | {"autopsy", "scry", "grimoire", "veil"}
     assert set(communion.tools) == expected
 
 
 def test_write_rituals_are_hidden_until_allowed(make_history):
     root = make_history(HISTORY)
-    writers = {"resurrect", "reanimate", "banish"}
+    writers = {"resurrect", "reanimate", "banish", "scavenge"}
     sealed = commune.assemble(str(root))
     assert not writers & set(sealed.tools)
     open_crypt = commune.assemble(str(root), allow_write=True)
@@ -145,6 +146,25 @@ def test_reanimate_round_trip_stays_inside_the_circle(make_history, tmp_path: Pa
     outside = tmp_path / "elsewhere-risen"
     with pytest.raises(commune.CommuneError, match="outside the circle"):
         risen.call("reanimate", {"text": packed, "out": str(outside)})
+
+
+def test_scavenge_loots_only_inside_the_circle(make_history, tmp_path: Path):
+    root = make_history(
+        [
+            {
+                "message": "burial",
+                "write": {"skills/alpha/SKILL.md": '---\nname: alpha\ndescription: "A."\n---\n'},
+            }
+        ]
+    )
+    open_crypt = commune.assemble(str(root), allow_write=True)
+    crypt = root / "crypt"
+    result = json.loads(open_crypt.call("scavenge", {"out": str(crypt)}))
+    assert (crypt / "alpha/SKILL.md").is_file()
+    assert result["skills"][0]["name"] == "alpha"
+    outside = tmp_path / "elsewhere-crypt"
+    with pytest.raises(commune.CommuneError, match="outside the circle"):
+        open_crypt.call("scavenge", {"out": str(outside)})
 
 
 def test_unknown_ritual_raises(communion: commune.Communion):

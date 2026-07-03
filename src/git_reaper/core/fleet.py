@@ -25,6 +25,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+from git_reaper.core.scavenge import skill_description
 from git_reaper.models import GraveOutcome, NecropolisResult
 
 MANIFEST = "necropolis.toml"
@@ -34,8 +35,10 @@ Runner = Callable[[list[str]], int]
 
 _FORMAT_EXT = {"md": ".md", "json": ".json", "csv": ".csv", "html": ".html"}
 
-#: Commands whose --out is a directory bundle (one skill per grave), not a file.
-BUNDLE_COMMANDS = frozenset({"distill"})
+#: Commands whose --out is a directory bundle (a skill library per grave),
+#: not a file. Both leave a SKILL.md at the bundle root for the fleet index
+#: to read back: distill's IS the skill, scavenge's routes to the loot inside.
+BUNDLE_COMMANDS = frozenset({"distill", "scavenge"})
 
 
 class FleetError(ValueError):
@@ -182,23 +185,6 @@ def render_index(result: NecropolisResult) -> str:
     return "\n".join(lines) + "\n"
 
 
-_DESCRIPTION = re.compile(r'^description:\s*"?(.*?)"?\s*$')
-
-
-def _skill_description(skill_md: Path) -> str:
-    """A skill's own description line, read back from its frontmatter."""
-    try:
-        text = skill_md.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
-    for line in text.splitlines()[:10]:  # frontmatter lives at the top
-        match = _DESCRIPTION.match(line)
-        if match:
-            # Escape for the table cell it lands in: pipes and newlines corrupt it.
-            return match.group(1).replace("|", "\\|").strip()
-    return ""
-
-
 def render_index_skill(result: NecropolisResult, out_dir: Path) -> str:
     """The routing skill at the library's root: one row per harvested skill.
 
@@ -211,28 +197,32 @@ def render_index_skill(result: NecropolisResult, out_dir: Path) -> str:
     lines = [
         "---",
         f"name: {name}",
-        f'description: "A skill library: {len(reaped)} {repos} distilled, one skill '
+        f'description: "A skill library: {len(reaped)} {repos} harvested, one entry '
         'each. Load this first, then follow the table to the right one."',
         "---",
         "",
         f"# Skill library: {name}",
         "",
-        "One skill per repository. Find the repo you are working in below and load",
-        "its `SKILL.md`; everything in it was distilled from that repo itself.",
+        "One entry per repository. Find the repo you are working in below and load",
+        "its `SKILL.md`; everything in it was harvested from that repo itself.",
         "",
         "| skill | source | what it teaches |",
         "| --- | --- | --- |",
     ]
     for outcome in reaped:
-        description = _skill_description(Path(outcome.artifact) / "SKILL.md")
+        description = skill_description(Path(outcome.artifact) / "SKILL.md")
         lines.append(
             f"| [{outcome.name}]({outcome.name}/SKILL.md) | {outcome.source} | {description} |"
         )
+    # A grave lands here when its ritual failed OR legitimately found nothing
+    # to write (scavenge on a skill-less repo exits 0 with no bundle).
     missing = [o for o in result.graves if not (o.ok and o.artifact)]
     if missing:
         lines.append("")
         lines.append(
-            "Not harvested (the fan-out failed there): " + ", ".join(o.name for o in missing) + "."
+            "Not harvested (the ritual failed or found nothing there): "
+            + ", ".join(o.name for o in missing)
+            + "."
         )
     return "\n".join(lines) + "\n"
 
