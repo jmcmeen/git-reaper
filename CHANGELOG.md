@@ -7,10 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-03
+
+### Added
+
+- **Scavenging (`reaper scavenge`).** Where `distill` writes a new skill,
+  `scavenge` steals the ones already interred. Every folder holding a
+  `SKILL.md` is lifted whole — references, scripts, binary assets, byte for
+  byte — into a library directory with a routing `SKILL.md` indexing the
+  loot. Ignore rules hold, name collisions get numbered, re-scavenging
+  refreshes instead of duplicating, and `necropolis scavenge` loots a whole
+  fleet under a two-level routing index.
+
 ## [0.9.0] - 2026-07-03
 
 Last Rites and the Number of the Bits: the hardening pass and the dream
-rituals, landed together.
+rituals.
 
 ### Added
 
