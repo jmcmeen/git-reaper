@@ -129,6 +129,32 @@ def test_chambers_keep_state_between_visits(necropolis):
     asyncio.run(scenario())
 
 
+def test_altar_reaps_a_positional_ritual(necropolis):
+    async def scenario() -> None:
+        app = ReaperApp(source=str(necropolis))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            altar = await _enter(app, pilot, "altar")
+            altar.set_operation("autopsy")
+            if altar._options_ready is not None:
+                await altar._options_ready
+            altar.query_one("#opt-path", Input).value = "README.md"
+            altar.action_reap()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            text = altar.query_one("#preview", TextArea).text
+            assert "schema:    autopsy/v1" in text
+            # an empty path surfaces the runner's plain error, not a crash
+            altar.query_one("#opt-path", Input).value = ""
+            altar.action_reap()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            status = str(altar.query_one("#status", Label).render())
+            assert "autopsy needs a file" in status
+
+    asyncio.run(scenario())
+
+
 # -- the altar -----------------------------------------------------------------
 
 
