@@ -258,3 +258,17 @@ def test_over_the_wire(make_history):
             assert {p.name for p in prompts.prompts} == set(commune.PROMPTS)
 
     anyio.run(scenario)
+
+
+def test_positional_rituals_keep_their_dedicated_mcp_tools(communion: commune.Communion):
+    # autopsy and veil joined the TUI catalog, but the communion keeps the
+    # richer bespoke tools: `follow` (not `no_follow`) for autopsy, raw
+    # `text` (never a disk path) for veil -- one tool per name, no shadowing.
+    autopsy = communion.tools["autopsy"].input_schema
+    assert autopsy["required"] == ["path"]
+    assert "follow" in autopsy["properties"] and "no_follow" not in autopsy["properties"]
+    veil = communion.tools["veil"].input_schema
+    assert "text" in veil["properties"] and "file" not in veil["properties"]
+    # lineage flows through the generic catalog handler; its needle is required
+    lineage = communion.tools["lineage"].input_schema
+    assert lineage["required"] == ["needle"]
