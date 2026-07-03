@@ -112,6 +112,112 @@ reaper cast nightly-pack
 reaper cast nightly-pack --split-tokens 50000   # override at cast time
 ```
 
+## Necromancy
+
+Mining commit history: who, what, when, and what has died. These rituals
+need a git repo (local, or a URL cloned into the catacombs at full depth);
+all of them accept `--ref` to read a branch, tag, or sha.
+
+### chronicle
+
+Extract commit history -- sha, author, date, message, files touched,
+insertions and deletions. `--changelog` groups commits under the tag that
+heads their release range.
+
+```sh
+reaper chronicle .
+reaper chronicle . -n 50 --format csv > history.csv
+reaper chronicle https://github.com/Textualize/rich --changelog -o HISTORY.md
+```
+
+### souls
+
+Contributor stats: commits, lines added and removed, first and last seen,
+and a bus-factor estimate. `--heatmap` adds a day-of-week x hour activity
+grid -- bucketed by each commit's recorded timezone, so the output never
+depends on the machine -- and names the repo's witching hour.
+
+```sh
+reaper souls .
+reaper souls . --heatmap
+reaper souls . --format json -o souls.json
+```
+
+### haunt
+
+Code churn and hotspots: files ranked by change frequency and churn, the
+classic bug-risk proxy.
+
+```sh
+reaper haunt .
+reaper haunt . -n 20 --format csv
+```
+
+### autopsy
+
+Deep single-file examination: the creation commit, rename history
+(followed by default; `--no-follow` to pin the path), authors over time,
+churn totals, and a blame-based line-age summary.
+
+```sh
+reaper autopsy src/git_reaper/cli.py
+reaper autopsy README.md -s https://github.com/Textualize/rich --format json
+```
+
+### graveyard
+
+Every file that ever lived and died: path, date of death, the fatal
+commit, and its author. Renamed-away paths count as deaths.
+
+```sh
+reaper graveyard .
+reaper graveyard . --format csv > graveyard.csv
+```
+
+### resurrect
+
+Restore a dead file's last living bytes -- read from the parent of the
+commit that removed it -- into the working tree or `--out` (a directory
+keeps the file's path; an exact file target renames it). Absolute paths
+and `..` segments are refused, same as reanimate; `--force` overwrites.
+
+```sh
+reaper graveyard .                       # find what can be raised
+reaper resurrect docs/old-spec.md
+reaper resurrect docs/old-spec.md -o attic/ --force
+```
+
+### ghosts
+
+Branch hygiene: branches ranked by abandonment, with merged-but-undeleted
+and gone-upstream flags, plus a stale flag for branches idle past `--than`.
+
+```sh
+reaper ghosts .
+reaper ghosts . --than 90d --format csv
+```
+
+### rot
+
+Staleness report: surviving files ranked by how long they have gone
+untouched, ages derived from a single log pass. The `[ward]` table can
+gate on it (`rot = "730d"`).
+
+```sh
+reaper rot . -n 30
+reaper rot . -x "docs/*" --format json
+```
+
+### tombstone
+
+A stats card for demos and READMEs -- born, age, commits, souls, last
+words, the witching hour -- as ASCII tombstone art, or JSON.
+
+```sh
+reaper tombstone .
+reaper tombstone https://github.com/Textualize/rich --format json
+```
+
 ## Dark arts
 
 Security and risk mining. `exhume` and `veil` share one rules engine
@@ -228,6 +334,38 @@ reaper plague .                    # consult the OSV oracle
 reaper plague . --offline          # parse manifests, never touch the network
 reaper plague . --fail-on any      # exit 3 if any affliction is found
 ```
+
+### distill
+
+The apprentice: read a repo and emit a portable Agent Skill -- a `SKILL.md`
+bundle (default `skills/<name>/`) with `reference/` files for structure
+(the bones map), conventions (layout, languages, tooling, the measured
+commit style), commands (real build/test/lint/run invocations lifted from
+`pyproject.toml`, the `Makefile`, `package.json`, and CI workflows --
+never guessed), gotchas (the files that break most, and the fix themes
+that recur), and ownership (top souls and the bus factor; `--anon`
+reduces them to roles). Composed from rituals that already exist,
+deterministic by default: zero network, zero model calls. `--profile
+{repo,stack,onboarding}` sets the voice.
+
+Every skill is stamped with the source and sha it was distilled from, and
+`distill --check DIR` exits 3 (cursed) once the code has moved on -- a
+one-line CI freshness gate, also foldable into the `[ward]` table.
+`--polish CMD` is the opt-in escape hatch from the deterministic draft:
+each reference file's prose is piped through your own command (stdin to
+stdout -- a `claude -p` wrapper, a local model, anything you trust), while
+frontmatter and provenance stamps are held back and reattached, so a
+polisher may smooth prose but never rewrite facts of origin.
+
+```sh
+reaper distill .                                # write skills/<name>/
+reaper distill . --profile onboarding --anon -o skills/repo-guide
+reaper distill --check skills/repo-guide        # exit 3 once stale
+reaper distill . --polish "claude -p 'tighten this prose'"
+```
+
+At fleet scale, `reaper necropolis distill` writes one skill per grave
+plus a routing index skill at the library's root.
 
 ### necropolis
 
