@@ -217,17 +217,23 @@ class Communion:
         """Assemble the tool catalog, optionally restricted to `only` names."""
         specs: list[ToolSpec] = []
         for op in tui_ops.OPERATIONS:
+            if op.key in ("autopsy", "veil"):
+                continue  # the dedicated tools below are richer: required
+                # args for autopsy, raw text (no disk) for veil
             props: dict[str, Any] = {"source": _source_property(self.default_source)}
             for opt in op.options:
                 if opt.name == "format":
                     continue  # tools always return JSON; formats are a human thing
                 props[opt.name] = _opt_schema(opt)
             note = " Needs git history." if op.needs_git else ""
+            schema: dict[str, Any] = {"type": "object", "properties": props}
+            if op.positional:
+                schema["required"] = [op.positional]
             specs.append(
                 ToolSpec(
                     name=op.key,
                     description=f"{op.description} ({op.group}).{note}",
-                    input_schema={"type": "object", "properties": props},
+                    input_schema=schema,
                     handler=self._op_handler(op),
                 )
             )
