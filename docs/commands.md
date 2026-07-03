@@ -401,6 +401,11 @@ freshness into one policy; one `reaper ward` exits 3 if any ward breaks. A
 check that crashes fails closed. With nothing inscribed, the default policy
 gates committed secrets (`exhume = "any"`).
 
+Like every command, ward reads its grimoire from where you stand -- the
+current directory -- not from the source argument. `reaper ward /elsewhere`
+scans `/elsewhere` under *your* policy; to gate a repo under its own
+`[ward]` table, run ward from inside it, as CI does.
+
 ```sh
 reaper ward .                      # the whole policy, one exit code
 ```
