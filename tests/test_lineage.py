@@ -52,7 +52,9 @@ def test_lineage_misses_honestly(make_history):
 
 def test_lineage_regex_mode(make_history):
     root = make_history(SCRIPT)
-    result = lineage_core.lineage(ref(root), r"MAGIC_\w+", regex=True)
+    # POSIX ERE only: git's -G compiles against the platform regex engine,
+    # and GNU classes like \w silently match nothing on macOS git.
+    result = lineage_core.lineage(ref(root), r"MAGIC_[A-Z]+", regex=True)
     assert result.regex
     assert [c.message for c in result.commits] == ["banish the token", "summon the token"]
 
