@@ -13,7 +13,7 @@ concatenates, and packs the contents of a git repo (or a plain directory) into
 clean, portable artifacts. Library first; the CLI is a thin adapter over
 `git_reaper.core`.
 
-## Install
+## 🕯️ Install
 
 ```sh
 uv tool install git-reaper   # or: pip install git-reaper
@@ -22,7 +22,7 @@ uv tool install git-reaper   # or: pip install git-reaper
 Both `reaper` and `git-reaper` land on your PATH (the long form is the
 fallback if the REAPER DAW already owns the short one).
 
-## Commands
+## 💀 Commands
 
 ### Reaping and packing
 
@@ -178,7 +178,7 @@ rot = "730d"          # exit 3 when files sit untouched past this age
 skills = ["skills/git-reaper"]   # distill --check freshness, gated
 ```
 
-## Optional extras
+## 🧟 Optional extras
 
 The base install is lean. Heavier machinery lives behind extras:
 
@@ -197,7 +197,7 @@ pip install "git-reaper[all]"      # everything
 Third-party "rituals" extend the CLI through the `git_reaper.rituals` entry
 point: a package that registers a Typer sub-app appears as `reaper <name>`.
 
-## Agents, Docker, and examples
+## 👻 Agents, Docker, and examples
 
 Three ready-made ways in, each in its own folder:
 
@@ -220,7 +220,7 @@ Three ready-made ways in, each in its own folder:
   byte-compare), `ci-gate.sh` (one-line `ward` gate), and `fleet.sh`
   (necropolis fan-out). Each takes a path or remote URL.
 
-## Behavior you can rely on
+## ⛓️ Behavior you can rely on
 
 - **Artifacts to stdout (or `--out`); narration to stderr.** Piping is always safe.
 - **Deterministic output.** Same repo state + same flags = byte-identical
@@ -241,7 +241,7 @@ Three ready-made ways in, each in its own folder:
   the theatrics.
 - **No telemetry.** The dead tell no tales.
 
-## Library use
+## 🔮 Library use
 
 ```python
 from git_reaper.core.source import resolve_source
@@ -254,7 +254,7 @@ with open("RICH.md", "w") as fh:
     write_harvest(result, fh)
 ```
 
-## Development
+## ⚗️ Development
 
 Everything runs through `uv` and the Makefile:
 
@@ -269,6 +269,6 @@ make run ARGS="tree ."
 make build      # sdist + wheel
 ```
 
-## License
+## 🪦 License
 
 MIT. Rest in peace.
