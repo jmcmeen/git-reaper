@@ -53,3 +53,6 @@ pulse: ## Signs-of-life check via the CLI
 
 summon: ## Summon the reaper (for testing the TUI)
 	$(UV) run reaper summon
+
+boo: ## Show a random piece of ASCII art
+	$(UV) run reaper boo

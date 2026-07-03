@@ -157,7 +157,7 @@ def _banner() -> None:
         if special:
             state.console.print(f"[ember]{special}[/ember]", highlight=False)
         else:
-            state.console.print(f"[eldritch]{art.MINI_SKULL}[/eldritch]", highlight=False)
+            state.console.print(f"[eldritch]{art.piece('mini-skull')}[/eldritch]", highlight=False)
 
 
 def _grimoire_rules() -> list[rules_core.Rule]:
