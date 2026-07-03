@@ -145,9 +145,7 @@ def parse(line: str) -> Incantation:
             elif op.source_arg != "none" and not seen_source:
                 source, seen_source = token, True
             else:
-                return Incantation(
-                    kind="error", error=f"{usage(op)} -- {token!r} is one too many"
-                )
+                return Incantation(kind="error", error=f"{usage(op)} -- {token!r} is one too many")
             i += 1
             continue
         flag = specs.get(token)
@@ -175,9 +173,7 @@ def parse(line: str) -> Incantation:
         i += 2
 
     if op.positional and not str(opts.get(op.positional) or "").strip():
-        return Incantation(
-            kind="error", error=f"{key} needs a {op.positional}: {usage(op)}"
-        )
+        return Incantation(kind="error", error=f"{key} needs a {op.positional}: {usage(op)}")
 
     argv = ("reaper", key, *incantation_argv(op, source, opts))
     return Incantation(kind="ritual", op=op, source=source, opts=opts, argv=argv)
