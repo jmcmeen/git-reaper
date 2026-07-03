@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -186,14 +187,27 @@ def omens_weights(root: Path | None = None) -> dict[str, float]:
     return weights
 
 
-#: [commune] keys a grimoire may set, and the type each must be.
-_COMMUNE_KEYS: dict[str, type | tuple[type, ...]] = {
-    "roots": list,
-    "hosts": list,
-    "tools": list,
-    "allow_write": bool,
-    "allow_network": bool,
-    "http": str,
+def _is_str_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _is_str(value: Any) -> bool:
+    return isinstance(value, str)
+
+
+def _is_bool(value: Any) -> bool:
+    return type(value) is bool  # a bare isinstance would also admit 0 and 1
+
+
+#: [commune] keys a grimoire may set, each with its shape check and a name
+#: for the error message when the check fails.
+_COMMUNE_KEYS: dict[str, tuple[Callable[[Any], bool], str]] = {
+    "roots": (_is_str_list, "a list of strings"),
+    "hosts": (_is_str_list, "a list of strings"),
+    "tools": (_is_str_list, "a list of strings"),
+    "allow_write": (_is_bool, "a boolean"),
+    "allow_network": (_is_bool, "a boolean"),
+    "http": (_is_str, "a string"),
 }
 
 
@@ -206,13 +220,11 @@ def commune_settings(root: Path | None = None) -> dict[str, Any]:
         if not isinstance(commune, dict):
             raise GrimoireError(f"{source}: 'commune' must be a table")
         for key, value in commune.items():
-            expected = _COMMUNE_KEYS.get(key)
-            if expected is None:
+            if key not in _COMMUNE_KEYS:
                 allowed = ", ".join(sorted(_COMMUNE_KEYS))
                 raise GrimoireError(f"{source}: unknown commune key {key!r} (use {allowed})")
-            if not isinstance(value, expected) or isinstance(value, bool) is not (expected is bool):
-                raise GrimoireError(f"{source}: commune key {key!r} has the wrong type")
-            if isinstance(value, list) and not all(isinstance(item, str) for item in value):
-                raise GrimoireError(f"{source}: commune key {key!r} must be a list of strings")
+            check, wants = _COMMUNE_KEYS[key]
+            if not check(value):
+                raise GrimoireError(f"{source}: commune key {key!r} must be {wants}")
             merged[key] = value
     return merged

@@ -79,9 +79,16 @@ def test_guard_refuses_paths_outside_the_circle(communion: commune.Communion, tm
 
 def test_guard_hosts():
     guard = commune.Guard(roots=(), hosts=("github.com",))
+
+    # URL-style remotes
     guard.check("https://github.com/o/r")  # allowed
     with pytest.raises(commune.CommuneError, match=r"gitlab\.com"):
         guard.check("https://gitlab.com/o/r")
+
+    # scp-style remotes are normalized to ssh:// and respect the same allowlist
+    guard.check("git@github.com:o/r")  # allowed
+    with pytest.raises(commune.CommuneError, match=r"gitlab\.com"):
+        guard.check("git@gitlab.com:o/r")
 
 
 def test_launch_source_host_is_always_allowed():
@@ -162,6 +169,24 @@ def test_prompts_render_with_the_source():
         commune.render_prompt("banshee", ".")
 
 
+@pytest.mark.parametrize(
+    ("address", "expected"),
+    [
+        ("127.0.0.1:6666", ("127.0.0.1", 6666)),
+        ("crypt.local:80", ("crypt.local", 80)),
+        ("[::1]:6666", ("::1", 6666)),  # IPv6 wants brackets
+    ],
+)
+def test_http_address_parses(address: str, expected: tuple[str, int]):
+    assert commune.parse_http_address(address) == expected
+
+
+@pytest.mark.parametrize("address", ["6666", "host:", ":6666", "host:zed", "[::1]", "a:99999"])
+def test_http_address_rejects_malformed(address: str):
+    with pytest.raises(commune.CommuneError, match="HOST:PORT"):
+        commune.parse_http_address(address)
+
+
 # -- grimoire [commune] table ---------------------------------------------------
 
 
@@ -169,6 +194,25 @@ def test_commune_settings_read_and_validate(tmp_path: Path):
     (tmp_path / ".reaperrc").write_text('[commune]\nroots = ["/a", "/b"]\nallow_write = true\n')
     settings = config.commune_settings(tmp_path)
     assert settings == {"roots": ["/a", "/b"], "allow_write": True}
+
+
+def test_assemble_honors_the_commune_table(tmp_path: Path, monkeypatch):
+    # the CLI + config layering end-to-end: flags absent, the grimoire rules
+    (tmp_path / ".reaperrc").write_text(
+        "[commune]\n"
+        'roots = ["/circle"]\n'
+        'hosts = ["github.com"]\n'
+        "allow_write = true\n"
+        "allow_network = true\n"
+        'tools = ["census", "exhume", "banish"]\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    communion = commune.assemble(str(tmp_path))
+    assert communion.guard.roots == (Path("/circle"),)
+    assert communion.guard.hosts == ("github.com",)
+    assert communion.guard.allow_write is True
+    assert communion.guard.allow_network is True
+    assert set(communion.tools) == {"census", "exhume", "banish"}
 
 
 @pytest.mark.parametrize(

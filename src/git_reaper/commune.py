@@ -29,7 +29,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 from git_reaper import cache, config, tui_ops
 from git_reaper.core import graveyard as graveyard_core
@@ -48,6 +48,12 @@ class CommuneError(ValueError):
     """A request the guardrails refuse."""
 
 
+def _remote_host(source: str) -> str:
+    """The host of a remote source, normalizing scp-style (git@host:path)
+    remotes into ssh:// URLs so the allowlist sees one spelling."""
+    return urlparse(source if "://" in source else f"ssh://{source}").hostname or ""
+
+
 @dataclass(frozen=True)
 class Guard:
     """What the server may touch: local roots, remote hosts, and the toggles."""
@@ -60,7 +66,7 @@ class Guard:
     def check(self, source: str) -> None:
         """Refuse sources outside the allowlist. Raises CommuneError."""
         if looks_remote(source):
-            host = urlparse(source if "://" in source else f"ssh://{source}").hostname or ""
+            host = _remote_host(source)
             if host not in self.hosts:
                 raise CommuneError(
                     f"host {host!r} is outside the circle (allowed: {list(self.hosts) or 'none'})"
@@ -435,7 +441,7 @@ def assemble(
     root_paths = [Path(r).expanduser().resolve() for r in root_strs]
     # The launch source is always inside the circle.
     if looks_remote(source):
-        launch_host = urlparse(source if "://" in source else f"ssh://{source}").hostname
+        launch_host = _remote_host(source)
         if launch_host and launch_host not in host_list:
             host_list.append(launch_host)
     elif not root_paths:
@@ -532,6 +538,19 @@ def serve(communion: Communion, http: str | None = None) -> None:
     anyio.run(_run_stdio)
 
 
+def parse_http_address(address: str) -> tuple[str, int]:
+    """HOST:PORT for --http. urlsplit does the parsing, including bracketed
+    IPv6 literals ([::1]:6666) and range-checking the port."""
+    try:
+        parts = urlsplit(f"//{address}")
+        host, port = parts.hostname, parts.port
+    except ValueError as exc:
+        raise CommuneError(f"--http wants HOST:PORT, got {address!r} ({exc})") from exc
+    if not host or port is None:
+        raise CommuneError(f"--http wants HOST:PORT (IPv6 in brackets), got {address!r}")
+    return host, port
+
+
 def _serve_http(server: Any, address: str) -> None:
     """The shared-reaper transport: streamable HTTP on host:port."""
     import contextlib
@@ -543,10 +562,7 @@ def _serve_http(server: Any, address: str) -> None:
     from starlette.routing import Mount
     from starlette.types import Receive, Scope, Send
 
-    host, _, port_str = address.rpartition(":")
-    if not host or not port_str.isdigit():
-        raise CommuneError(f"--http wants HOST:PORT, got {address!r}")
-
+    host, port = parse_http_address(address)
     manager = StreamableHTTPSessionManager(app=server, stateless=True)
 
     async def handle(scope: Scope, receive: Receive, send: Send) -> None:
@@ -558,4 +574,4 @@ def _serve_http(server: Any, address: str) -> None:
             yield
 
     app = Starlette(routes=[Mount("/mcp", app=handle)], lifespan=lifespan)
-    uvicorn.run(app, host=host, port=int(port_str), log_level="warning")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
