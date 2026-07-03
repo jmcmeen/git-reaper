@@ -1,5 +1,11 @@
 # git-reaper
 
+[![ci](https://github.com/jmcmeen/git-reaper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmcmeen/git-reaper/actions/workflows/ci.yml)
+[![docs](https://github.com/jmcmeen/git-reaper/actions/workflows/docs.yml/badge.svg)](https://jmcmeen.github.io/git-reaper/)
+[![PyPI](https://img.shields.io/pypi/v/git-reaper)](https://pypi.org/project/git-reaper/)
+[![Python versions](https://img.shields.io/pypi/pyversions/git-reaper)](https://pypi.org/project/git-reaper/)
+[![license: MIT](https://img.shields.io/pypi/l/git-reaper)](LICENSE)
+
 > A spooky utility for data mining git repositories (and any folder foolish enough to hold still).
 
 `git-reaper` reaps structured knowledge from repositories: it clones, gathers,
