@@ -73,6 +73,12 @@ def test_history_operations_are_flagged():
         "tombstone",
         "exhume",
         "omens",
+        "wake",
+        "possession",
+        "revenant",
+        "prophecy",
+        "exorcise",
+        "ward",
     }
 
 

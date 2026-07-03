@@ -18,6 +18,7 @@ from git_reaper.gitio.backend import (
     BlobRecord,
     BranchRecord,
     DeadFileRecord,
+    FileEventRecord,
     GitBackend,
     GitCommit,
     GitError,
@@ -144,6 +145,14 @@ class GitPythonGit(GitBackend):
 
     def deleted_files(self, repo: Path) -> list[DeadFileRecord]:
         return logparse.parse_deleted(self._exec(repo, logparse.deleted_args()))
+
+    def pickaxe(
+        self, repo: Path, needle: str, regex: bool = False, rel_path: str | None = None
+    ) -> list[GitCommit]:
+        return logparse.parse_log(self._exec(repo, logparse.pickaxe_args(needle, regex, rel_path)))
+
+    def file_events(self, repo: Path) -> list[FileEventRecord]:
+        return logparse.parse_events(self._exec(repo, logparse.events_args()))
 
     def show_file(self, repo: Path, rev: str, rel_path: str) -> bytes | None:
         try:

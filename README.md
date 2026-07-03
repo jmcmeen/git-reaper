@@ -29,8 +29,11 @@ fallback if the REAPER DAW already owns the short one).
 | `census` | File-type census: counts, sizes, line counts, language breakdown, token estimate. Size a repo before packing it. |
 | `distill` | Skill harvesting: read a repo and emit a portable Agent Skill (`SKILL.md` + `reference/`) that teaches a model to work there — conventions, real build/test/lint commands, the structural map, the files that break most, and who to ask (`--anon` for roles). Deterministic, no network, no model calls; `--polish CMD` optionally pipes each draft's prose through your own agent command (stamps and frontmatter protected). `--profile {repo,stack,onboarding}` sets the voice; `--check skills/<name>/` exits 3 when the code has moved past the stamped sha. `necropolis distill` harvests a whole fleet into a skill library with a routing index skill at its root. |
 | `unfinished` | Scan for TODO / FIXME / HACK / XXX markers, with authors via git blame and `--age` for how long each has haunted. |
+| `leech` | The inverse of harvest for ordinary documents: drain fenced code blocks out of a markdown file back into files. Blocks the document names (` ```python title=app.py ` or a bare path info string) keep their name; the rest are numbered by language. `--lang` filters; reanimate's path-traversal guards apply. |
+| `embalm` | Preserve a repo state in a deterministic, provenance-stamped `.tar.gz`: sorted entries, zeroed ownership, every timestamp pinned to the HEAD commit (byte-identical across runs), with a `PROVENANCE` block and a `MANIFEST.sha256` at the archive root. The receipt prints the archive's own sha256, so the snapshot is citable. |
 | `grimoire` | Show effective configuration, where each value came from, and stored recipes. |
 | `cast` | Run a saved recipe from the grimoire instead of retyping nine flags. |
+| `banshee` | Watch mode: poll a directory (ignore rules honored) and scream — re-run a recipe from the grimoire — whenever it changes. `--interval` tunes the poll, `--once` stops after the first scream. Portable polling, no extra dependencies. |
 | `pulse` | Signs-of-life check: git present, optional extras, cache health. |
 | `banish` | Clear the catacombs (the clone cache). `--older-than 7d` for partial exorcisms. |
 | `summon` | Launch the Sanctum, the interactive Textual TUI (needs the `[tui]` extra): a Dracula-themed workbench of chambers reached from a home crypt map. The Altar runs any analysis ritual (options, preview, save, cursed badge); the Grimoire composes recipes visually and inscribes them in `.reaperrc` for `cast`; the Incantation console is an assisted CLI with `/` commands, fuzzy menus, live flag validation, and history; the Necropolis board reaps a whole `necropolis.toml` fleet with per-grave fates; the Reliquary triages `exhume`/`omens`/`plague`/`rot` on one severity-sorted slab; the Séance table pairs the souls heatmap with an hour-by-hour commit explorer and a two-ref scry. Number keys jump chambers, escape returns home, Ctrl+P's palette knows every door and theme. Nothing is TUI-trapped: recipes cast headless and every console line is a real `reaper` invocation. |
@@ -49,6 +52,11 @@ fallback if the REAPER DAW already owns the short one).
 | `ghosts` | Branch hygiene: branches ranked by abandonment, with merged, gone-upstream, and (past `--than 90d`) stale flags. |
 | `rot` | Staleness report: surviving files ranked by how long they have gone untouched. |
 | `tombstone` | A stats card for demos and READMEs (born, age, commits, souls, last words, witching hour) as ASCII tombstone art, or JSON. |
+| `wake` | Draft a Keep-a-Changelog section from the commits since the last tag (or `--since REF`). Conventional-commit prefixes map to Added/Fixed/etc., everything else lands under Changed, and a version bump is suggested (`!` means major). A draft for a human to edit, honestly labeled as one. |
+| `lineage` | Trace a line's true origin across history with git's pickaxe (`-S`, or `-G` with `--regex`): every commit that added or removed the needle, and who first summoned it. `--path` narrows the dig. |
+| `possession` | The ownership and knowledge map: the dominant author per file and per top-level directory, with the share they hold. Files where one soul holds `--threshold` (default 75%) of the commits are flagged possessed — the bus-factor hotspots to find before they leave. |
+| `revenant` | Track what will not stay buried: files deleted and later re-added (deaths, rebirths, whether it walks today) and repeat offenders that keep collecting `fix` commits (`--fixes` sets the bar). |
+| `effigy` | Render the repo as a self-contained SVG poster: a contributor constellation, the witching-hours heatmap, and a directory treemap strip, stamped with provenance. `--format json` for the raw portrait data. |
 
 History commands need real history, so remote sources are cloned full-depth
 (a previously shallow catacombs clone is unshallowed automatically).
@@ -62,6 +70,9 @@ History commands need real history, so remote sources are cloned full-depth
 | `omens` | Composite per-file risk prophecy: a weighted blend of churn, bug-fix density, recency, and size. `--lens {churn,bugs,age,all}`, weights configurable in the grimoire. Hints, not fate. |
 | `doppelgangers` | Find duplicate files by content hash. Reports clusters and reclaimable space. |
 | `bloat` | Largest files in the working tree and, for repos, the blobs deleted from the tree but still weighing down `.git`. |
+| `prophecy` | Omens extended across time: forecast which files will demand attention next from heat (decayed activity), momentum (this `--horizon` window vs the one before), and fresh fixes. Like omens: hints, not fate. |
+| `exorcise` | Compose `bloat`'s dead blobs and `exhume`'s findings into a *safe* history-purge plan: the exact `git filter-repo` and BFG commands, with the warnings that belong beside them. It plans and prints; it never rewrites history itself. |
+| `ward` | The composite CI gate: fold the exhume/omens/plague/rot thresholds and `distill --check` freshness into one `[ward]` policy in the grimoire; one `reaper ward` exits 3 if any ward breaks. A check that crashes fails closed. With nothing inscribed it gates committed secrets (`exhume = "any"`). |
 
 ### Deeper necromancy
 
@@ -73,8 +84,9 @@ History commands need real history, so remote sources are cloned full-depth
 | `necropolis` | Fan any source-taking command across every grave in a `necropolis.toml` manifest (or a GitHub `--org`). Per-repo artifacts plus a combined `INDEX.md`. |
 
 Analysis commands add `--format html` for a self-contained, dark-themed
-report. `exhume --fail-on`, `omens --fail-over`, `plague --fail-on`, and a
-cursed grave in `necropolis` all exit `3` for one-line CI gates.
+report. `exhume --fail-on`, `omens --fail-over`, `plague --fail-on`, a broken
+`ward`, and a cursed grave in `necropolis` all exit `3` for one-line CI gates
+(`ward` is the one command to wire in when you want a single gate).
 
 ```sh
 reaper harvest https://github.com/Textualize/rich --pattern "*.md" -o RICH.md
@@ -108,6 +120,18 @@ reaper plague . --offline                     # dependency advisories (opt-in ne
 reaper necropolis harvest --tag docs --out-dir out/   # fan out over a manifest
 reaper haunt . --format html -o hotspots.html # self-contained dark report
 
+reaper ward .                                 # the whole [ward] policy, exit 3 if broken
+reaper banshee nightly-pack                   # re-cast the recipe on every change
+reaper leech TUTORIAL.md --out src/           # code blocks back into files
+reaper embalm . -o snapshot.tar.gz            # citable, byte-identical archive
+reaper wake .                                 # changelog draft since the last tag
+reaper lineage "def resolve_source" -s .      # who first summoned this line
+reaper possession . --threshold 0.8           # bus-factor hotspots
+reaper revenant .                             # what would not stay buried
+reaper prophecy . -n 20                       # which files demand attention next
+reaper exorcise . --min-size 5MB              # a purge plan (printed, never run)
+reaper effigy . -o portrait.svg               # the repo as an SVG poster
+
 reaper summon .            # interactive TUI (pip install "git-reaper[tui]")
 reaper commune .           # MCP server over stdio (pip install "git-reaper[mcp]")
 reaper commune . --http 127.0.0.1:6666 --root ~/repos   # a shared reaper for a team
@@ -139,6 +163,13 @@ churn = 0.35
 bugs = 0.30
 age = 0.20
 size = 0.15
+
+# the composite CI gate: one `reaper ward` checks all of it (exit 3 if broken)
+[ward]
+exhume = "any"        # or "high", or "off"
+omens = 0.85          # exit 3 when any omen scores this or worse
+rot = "730d"          # exit 3 when files sit untouched past this age
+skills = ["skills/git-reaper"]   # distill --check freshness, gated
 ```
 
 ## Optional extras
@@ -150,6 +181,9 @@ pip install "git-reaper[bones]"    # tree-sitter: bones for JS/TS/Go/Rust/Java/.
 pip install "git-reaper[tui]"      # textual: the Dracula `reaper summon` TUI
 pip install "git-reaper[tokens]"   # tiktoken: exact token counts
 pip install "git-reaper[git]"      # GitPython backend (GIT_REAPER_BACKEND=gitpython)
+pip install "git-reaper[pygit2]"   # libgit2 backend (GIT_REAPER_BACKEND=pygit2): the
+                                   # performance pass for history-heavy rituals; reads
+                                   # run in-process, clone/fetch still use real git
 pip install "git-reaper[mcp]"      # the `reaper commune` MCP server
 pip install "git-reaper[all]"      # everything
 ```

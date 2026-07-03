@@ -19,6 +19,7 @@ from git_reaper.gitio.backend import (
     BranchRecord,
     DeadFileRecord,
     FileChange,
+    FileEventRecord,
     GitCommit,
     TagRecord,
 )
@@ -74,6 +75,26 @@ def deleted_args() -> list[str]:
         "log",
         "--diff-filter=D",
         "--name-only",
+        "--no-renames",
+        f"--pretty=format:{_DELETED_FORMAT}",
+    ]
+
+
+def pickaxe_args(needle: str, regex: bool, rel_path: str | None) -> list[str]:
+    """Commits whose diffs add or remove the needle (git's pickaxe)."""
+    flag = f"-G{needle}" if regex else f"-S{needle}"
+    args = [*_QUOTEPATH, "log", f"--pretty=format:{_LOG_FORMAT}", "--numstat", flag]
+    if rel_path:
+        args += ["--", rel_path]
+    return args
+
+
+def events_args() -> list[str]:
+    # --no-renames so a rename reads as a death plus a birth (matching log()).
+    return [
+        *_QUOTEPATH,
+        "log",
+        "--name-status",
         "--no-renames",
         f"--pretty=format:{_DELETED_FORMAT}",
     ]
@@ -172,6 +193,21 @@ def parse_deleted(out: str) -> list[DeadFileRecord]:
                 seen.add(path)
                 dead.append(DeadFileRecord(path=path, sha=sha, date=date, author=author))
     return dead
+
+
+def parse_events(out: str) -> list[FileEventRecord]:
+    """Every add/modify/delete a commit ever recorded, newest first."""
+    events: list[FileEventRecord] = []
+    for record in out.split(RS):
+        if US not in record:
+            continue
+        header, _, body = record.partition("\n")
+        sha, date, _author = header.split(US)
+        for line in body.split("\n"):
+            status, _, path = line.partition("\t")
+            if status and path:
+                events.append(FileEventRecord(path=path, status=status[:1], sha=sha, date=date))
+    return events
 
 
 def parse_renames(out: str, rel_path: str) -> list[str]:

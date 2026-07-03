@@ -30,17 +30,23 @@ from typing import Any
 from git_reaper import cache, config, fsutil
 from git_reaper.core import census as census_core
 from git_reaper.core import dedupe as dedupe_core
+from git_reaper.core import exorcise as exorcise_core
 from git_reaper.core import graveyard as graveyard_core
 from git_reaper.core import harvest as harvest_core
 from git_reaper.core import history as history_core
 from git_reaper.core import hygiene as hygiene_core
 from git_reaper.core import pack as pack_core
 from git_reaper.core import plague as plague_core
+from git_reaper.core import possession as possession_core
+from git_reaper.core import prophecy as prophecy_core
+from git_reaper.core import revenant as revenant_core
 from git_reaper.core import risk as risk_core
 from git_reaper.core import rules as rules_core
 from git_reaper.core import scan as scan_core
 from git_reaper.core import skeleton as skeleton_core
 from git_reaper.core import tree as tree_core
+from git_reaper.core import wake as wake_core
+from git_reaper.core import ward as ward_core
 from git_reaper.formatters import csvfmt, htmlfmt, jsonfmt, markdown
 from git_reaper.models import RepoRef
 
@@ -323,6 +329,74 @@ def _plague(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     return ReapResult(text, summary, cursed=bool(result.afflictions))
 
 
+def _ward(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    policy, policy_source = config.ward_policy()
+    rules = rules_core.load_rules(config.custom_rules())
+    result = ward_core.ward(
+        repo,
+        policy,
+        policy_source=policy_source,
+        rules=rules,
+        weights=config.omens_weights(),
+        invoked=_invoked("ward"),
+    )
+    text = _dispatch("ward", result, opts["format"], markdown.render_ward)
+    broken = sum(1 for c in result.checks if not c.ok)
+    summary = f"{len(result.checks)} wards, {broken} broken"
+    return ReapResult(text, summary, cursed=result.cursed)
+
+
+def _exorcise(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    raw = str(opts["min_size"]).strip()
+    floor = fsutil.parse_size(raw) if raw else exorcise_core.DEFAULT_MIN_SIZE
+    rules = rules_core.load_rules(config.custom_rules())
+    result = exorcise_core.exorcise(repo, rules=rules, min_size=floor, invoked=_invoked("exorcise"))
+    text = _dispatch("exorcise", result, opts["format"], markdown.render_exorcise)
+    summary = (
+        f"{len(result.targets)} bodies to expel (plan only)"
+        if result.targets
+        else "the walls are clean"
+    )
+    return ReapResult(text, summary, cursed=bool(result.targets))
+
+
+def _prophecy(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = prophecy_core.prophecy(
+        repo,
+        horizon_days=opts["horizon"] or prophecy_core.DEFAULT_HORIZON_DAYS,
+        limit=opts["limit"],
+        invoked=_invoked("prophecy"),
+    )
+    text = _dispatch("prophecy", result, opts["format"], markdown.render_prophecy)
+    return ReapResult(text, f"{len(result.prophecies)} prophecies read")
+
+
+# --------------------------------------------------------------------------
+# deeper necromancy (Phase 12)
+# --------------------------------------------------------------------------
+
+
+def _wake(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = wake_core.wake(repo, invoked=_invoked("wake"))
+    text = _dispatch("wake", result, opts["format"], markdown.render_wake)
+    since = f"since {result.since}" if result.since else "whole history"
+    return ReapResult(text, f"{result.commits} commits {since}, bump {result.suggested_bump}")
+
+
+def _possession(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = possession_core.possession(repo, limit=opts["limit"], invoked=_invoked("possession"))
+    text = _dispatch("possession", result, opts["format"], markdown.render_possession)
+    return ReapResult(text, f"{len(result.files)} files, {result.possessed_count} possessed")
+
+
+def _revenant(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
+    result = revenant_core.revenant(repo, invoked=_invoked("revenant"))
+    text = _dispatch("revenant", result, opts["format"], markdown.render_revenant)
+    return ReapResult(
+        text, f"{len(result.revenants)} revenants, {len(result.offenders)} repeat offenders"
+    )
+
+
 # --------------------------------------------------------------------------
 # the registry
 # --------------------------------------------------------------------------
@@ -461,6 +535,58 @@ OPERATIONS: list[Operation] = [
         False,
         _plague,
         (ToggleOpt("offline", "offline (no network)", default=True), _format_opt(*_ALL_FORMATS)),
+    ),
+    Operation(
+        "wake",
+        "changelog draft since the last tag",
+        "necromancy",
+        True,
+        _wake,
+        (_format_opt("md", "json"),),
+    ),
+    Operation(
+        "possession",
+        "who holds each file",
+        "necromancy",
+        True,
+        _possession,
+        (NumberOpt("limit", "limit (top N)"), _format_opt("md", "json")),
+    ),
+    Operation(
+        "revenant",
+        "what will not stay buried",
+        "necromancy",
+        True,
+        _revenant,
+        (_format_opt("md", "json"),),
+    ),
+    Operation(
+        "prophecy",
+        "which files demand attention next",
+        "dark arts",
+        True,
+        _prophecy,
+        (
+            NumberOpt("horizon", "horizon (days)", default=prophecy_core.DEFAULT_HORIZON_DAYS),
+            NumberOpt("limit", "limit (top N)"),
+            _format_opt("md", "json"),
+        ),
+    ),
+    Operation(
+        "exorcise",
+        "the purge plan (never performed)",
+        "dark arts",
+        True,
+        _exorcise,
+        (TextOpt("min_size", "min size (e.g. 1MB)"), _format_opt("md", "json")),
+    ),
+    Operation(
+        "ward",
+        "the composite CI gate",
+        "dark arts",
+        True,
+        _ward,
+        (_format_opt("md", "json"),),
     ),
 ]
 

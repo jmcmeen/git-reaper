@@ -684,6 +684,232 @@ class NecropolisResult:
 
 
 @dataclass
+class WardCheck:
+    """One ward in the composite CI gate: a ritual run against its threshold."""
+
+    name: str  # "exhume", "omens", "plague", "rot", or "skills"
+    ok: bool
+    threshold: str  # the policy value the check ran against, as text
+    detail: str  # plain-cause summary; masked previews only, never a secret
+    findings: int = 0
+
+
+@dataclass
+class WardResult:
+    """The composite gate: every configured ward, and whether any broke."""
+
+    provenance: Provenance
+    checks: list[WardCheck] = field(default_factory=list)
+    policy_source: str = "default"  # where the [ward] table came from
+
+    @property
+    def cursed(self) -> bool:
+        return any(not check.ok for check in self.checks)
+
+
+@dataclass
+class LeechBlock:
+    """One fenced code block pulled out of a markdown document."""
+
+    path: str  # where it was (or would be) written, relative to --out
+    language: str
+    line: int  # the fence's line in the source document
+    size_bytes: int = 0
+    named: bool = False  # True when the document itself named the file
+
+
+@dataclass
+class LeechResult:
+    """Fenced code blocks drained from a document back into files."""
+
+    provenance: Provenance
+    input: str  # the document that was leeched ("-" for stdin)
+    out: str = ""
+    blocks: list[LeechBlock] = field(default_factory=list)
+    skipped: int = 0  # blocks dropped by the --lang filter
+
+
+@dataclass
+class EmbalmResult:
+    """A repo state preserved in a provenance-stamped tarball."""
+
+    provenance: Provenance
+    out: str
+    files: int = 0
+    total_bytes: int = 0
+    archive_sha256: str = ""
+
+
+@dataclass
+class WakeSection:
+    """One Keep-a-Changelog category in the drafted section."""
+
+    title: str  # Added, Changed, Deprecated, Removed, Fixed, or Security
+    entries: list[CommitEntry] = field(default_factory=list)
+
+
+@dataclass
+class WakeResult:
+    """A changelog section drafted from the commits since the last tag."""
+
+    provenance: Provenance
+    since: str = ""  # the tag (or ref) the wake counts from ("" if none)
+    since_date: str = ""
+    suggested_bump: str = "none"  # "major", "minor", "patch", or "none"
+    commits: int = 0
+    sections: list[WakeSection] = field(default_factory=list)
+
+
+@dataclass
+class LineageResult:
+    """Every commit that added or removed a needle, back to its first summoning."""
+
+    provenance: Provenance
+    needle: str
+    regex: bool = False
+    path: str = ""  # "" when the whole tree was searched
+    commits: list[CommitEntry] = field(default_factory=list)  # newest first
+    origin: CommitEntry | None = None  # the oldest: who first summoned it
+
+
+@dataclass
+class FileOwnership:
+    """One file's dominant author and how tightly they hold it."""
+
+    path: str
+    owner: str
+    owner_commits: int = 0
+    commits: int = 0
+    share: float = 0.0  # owner_commits / commits, 0..1
+    possessed: bool = False  # share at or above the threshold
+
+
+@dataclass
+class DirOwnership:
+    """One top-level directory's dominant author."""
+
+    path: str
+    owner: str
+    owner_commits: int = 0
+    commits: int = 0
+    share: float = 0.0
+    files: int = 0
+
+
+@dataclass
+class PossessionResult:
+    """The knowledge map: who holds each file, and where one soul holds all."""
+
+    provenance: Provenance
+    threshold: float = 0.75
+    files: list[FileOwnership] = field(default_factory=list)
+    dirs: list[DirOwnership] = field(default_factory=list)
+    possessed_count: int = 0
+
+
+@dataclass
+class Revenant:
+    """A file that died and rose again (at least once)."""
+
+    path: str
+    deaths: int = 0
+    rebirths: int = 0
+    last_died: str = ""
+    last_raised: str = ""
+    alive: bool = True  # still in the tree at HEAD
+
+
+@dataclass
+class RepeatOffender:
+    """A file that keeps getting 'fixed'."""
+
+    path: str
+    bug_commits: int = 0
+    commits: int = 0
+    last_fix: str = ""
+
+
+@dataclass
+class RevenantResult:
+    """What will not stay buried: resurrections and repeat offenders."""
+
+    provenance: Provenance
+    revenants: list[Revenant] = field(default_factory=list)
+    offenders: list[RepeatOffender] = field(default_factory=list)
+    min_fixes: int = 3  # offender threshold
+
+
+@dataclass
+class Prophecy:
+    """One file's forecast. Like omens: a hint, never fate."""
+
+    path: str
+    score: float
+    heat: float = 0.0  # decayed activity, normalized 0..1
+    momentum: float = 0.0  # recent window vs the one before, 0..1
+    bug_momentum: float = 0.0
+    recent_commits: int = 0  # inside the horizon
+    prior_commits: int = 0  # in the horizon before that
+    commits: int = 0
+    bug_commits: int = 0
+    last_touch: str = ""
+
+
+@dataclass
+class ProphecyResult:
+    """Omens extended across time: which files will demand attention next."""
+
+    provenance: Provenance
+    horizon_days: int = 90
+    prophecies: list[Prophecy] = field(default_factory=list)
+
+
+@dataclass
+class ExorciseTarget:
+    """One thing the purge plan would expel from history."""
+
+    path: str
+    reason: str  # e.g. "dead blob (12.0 MB)" or "secret: aws-access-key"
+    sha: str = ""  # blob or commit sha, when known
+    size_bytes: int = 0
+
+
+@dataclass
+class ExorciseResult:
+    """A safe purge plan: it plans and prints, it never rewrites history."""
+
+    provenance: Provenance
+    targets: list[ExorciseTarget] = field(default_factory=list)
+    commands: list[str] = field(default_factory=list)  # git-filter-repo, then bfg
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass
+class EffigySlice:
+    """One top-level directory's share of the effigy treemap."""
+
+    name: str
+    size_bytes: int = 0
+    files: int = 0
+
+
+@dataclass
+class EffigyResult:
+    """The portrait of the dead: everything the SVG poster is drawn from."""
+
+    provenance: Provenance
+    name: str
+    born: str = ""
+    last: str = ""
+    commits: int = 0
+    bus_factor: int = 0
+    souls: list[Soul] = field(default_factory=list)  # top N by commits
+    heatmap: list[list[int]] = field(default_factory=list)  # 7 x 24
+    witching_hour: str | None = None
+    slices: list[EffigySlice] = field(default_factory=list)
+
+
+@dataclass
 class CacheEntry:
     """One interred repo in the catacombs."""
 

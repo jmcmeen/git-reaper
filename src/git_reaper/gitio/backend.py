@@ -54,6 +54,16 @@ class DeadFileRecord:
 
 
 @dataclass
+class FileEventRecord:
+    """One add/modify/delete of a path by a commit (a --name-status row)."""
+
+    path: str
+    status: str  # "A", "M", or "D"
+    sha: str
+    date: str
+
+
+@dataclass
 class BranchRecord:
     """One local branch: its tip, recorded activity, and hygiene flags."""
 
@@ -140,6 +150,19 @@ class GitBackend(ABC):
     @abstractmethod
     def deleted_files(self, repo: Path) -> list[DeadFileRecord]:
         """Every file a commit ever removed, newest death first, one row per path."""
+
+    # -- deep mining (Phase 11/12: lineage, revenant) ------------------------
+
+    @abstractmethod
+    def pickaxe(
+        self, repo: Path, needle: str, regex: bool = False, rel_path: str | None = None
+    ) -> list[GitCommit]:
+        """Commits whose diffs added or removed the needle (git -S, or -G
+        when regex), newest first, with numstat churn."""
+
+    @abstractmethod
+    def file_events(self, repo: Path) -> list[FileEventRecord]:
+        """Every add/modify/delete event in history, newest first."""
 
     @abstractmethod
     def show_file(self, repo: Path, rev: str, rel_path: str) -> bytes | None:

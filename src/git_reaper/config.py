@@ -126,6 +126,15 @@ def load_grimoire(root: Path | None = None) -> GrimoireResult:
         )
     )
 
+    policy, policy_source = ward_policy(root)
+    result.settings.append(
+        ConfigValue(
+            key="ward",
+            value=" ".join(f"{k}={policy[k]}" for k in sorted(policy)),
+            source=policy_source,
+        )
+    )
+
     result.recipes = sorted(recipes.values(), key=lambda r: r.name)
     return result
 
@@ -230,6 +239,50 @@ def commune_settings(root: Path | None = None) -> dict[str, Any]:
                 raise GrimoireError(f"{source}: commune key {key!r} must be {wants}")
             merged[key] = value
     return merged
+
+
+#: The default ward policy when no [ward] table is inscribed: committed
+#: secrets are always a broken ward; everything else is opt-in.
+DEFAULT_WARD: dict[str, Any] = {"exhume": "any"}
+
+#: [ward] keys a grimoire may set, with shape checks (like _COMMUNE_KEYS).
+#: ward.py owns what each value means; here we only refuse miswritten tables.
+_WARD_KEYS: dict[str, tuple[Callable[[Any], bool], str]] = {
+    "exhume": (lambda v: v in ("any", "high", "off"), '"any", "high", or "off"'),
+    "omens": (
+        lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1,
+        "a number between 0 and 1",
+    ),
+    "plague": (lambda v: v in ("any", "off"), '"any" or "off"'),
+    "rot": (_is_str, 'an age string like "365d"'),
+    "skills": (_is_str_list, "a list of skill directory paths"),
+}
+
+
+def ward_policy(root: Path | None = None) -> tuple[dict[str, Any], str]:
+    """The [ward] table (validated for shape) and where it came from.
+
+    Returns the default policy (exhume any) when nothing is inscribed, so
+    `reaper ward` gates something useful out of the box.
+    """
+    merged: dict[str, Any] = {}
+    origin = "default"
+    for source, table in _layered_tables(root):
+        ward = table.get("ward", {})
+        if not isinstance(ward, dict):
+            raise GrimoireError(f"{source}: 'ward' must be a table")
+        for key, value in ward.items():
+            if key not in _WARD_KEYS:
+                allowed = ", ".join(sorted(_WARD_KEYS))
+                raise GrimoireError(f"{source}: unknown ward key {key!r} (use {allowed})")
+            check, wants = _WARD_KEYS[key]
+            if not check(value):
+                raise GrimoireError(f"{source}: ward key {key!r} must be {wants}")
+            merged[key] = value
+            origin = source
+    if not merged:
+        return dict(DEFAULT_WARD), origin
+    return merged, origin
 
 
 # --------------------------------------------------------------------------

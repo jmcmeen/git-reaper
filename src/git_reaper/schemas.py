@@ -111,11 +111,22 @@ COMMAND_MODELS: dict[str, type] = {
     "plague": models.PlagueResult,
     "necropolis": models.NecropolisResult,
     "distill": models.DistillResult,
+    "ward": models.WardResult,
+    "leech": models.LeechResult,
+    "embalm": models.EmbalmResult,
+    "wake": models.WakeResult,
+    "lineage": models.LineageResult,
+    "possession": models.PossessionResult,
+    "revenant": models.RevenantResult,
+    "prophecy": models.ProphecyResult,
+    "exorcise": models.ExorciseResult,
+    "effigy": models.EffigyResult,
 }
 
 #: Commands with no JSON output of their own (`cast` emits whatever the
-#: recipe's command emits; `summon` launches the TUI), exempt from --schema.
-SCHEMALESS_COMMANDS = frozenset({"cast", "summon", "commune"})
+#: recipe's command emits; `summon` launches the TUI; `banshee` re-runs a
+#: recipe and emits whatever it emits), exempt from --schema.
+SCHEMALESS_COMMANDS = frozenset({"cast", "summon", "commune", "banshee"})
 
 
 def artifact_schema(command: str) -> str:

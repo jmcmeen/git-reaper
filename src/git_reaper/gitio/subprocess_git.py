@@ -16,6 +16,7 @@ from git_reaper.gitio.backend import (
     BlobRecord,
     BranchRecord,
     DeadFileRecord,
+    FileEventRecord,
     GitBackend,
     GitCommit,
     GitError,
@@ -154,6 +155,16 @@ class SubprocessGit(GitBackend):
 
     def deleted_files(self, repo: Path) -> list[DeadFileRecord]:
         return logparse.parse_deleted(self._run(logparse.deleted_args(), cwd=repo))
+
+    def pickaxe(
+        self, repo: Path, needle: str, regex: bool = False, rel_path: str | None = None
+    ) -> list[GitCommit]:
+        return logparse.parse_log(
+            self._run(logparse.pickaxe_args(needle, regex, rel_path), cwd=repo)
+        )
+
+    def file_events(self, repo: Path) -> list[FileEventRecord]:
+        return logparse.parse_events(self._run(logparse.events_args(), cwd=repo))
 
     def show_file(self, repo: Path, rev: str, rel_path: str) -> bytes | None:
         proc = subprocess.run(
