@@ -75,6 +75,36 @@ def test_arrow_keys_select_without_enter(necropolis):
     asyncio.run(scenario())
 
 
+def test_descriptions_toggle_keeps_selection(necropolis):
+    async def scenario() -> None:
+        app = ReaperApp(source=str(necropolis))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            ops = app.query_one("#operations", OptionList)
+            ops.focus()
+            app.set_operation("souls")
+            await pilot.pause()
+
+            def prompt_of(key: str) -> str:
+                for i in range(ops.option_count):
+                    option = ops.get_option_at_index(i)
+                    if option.id == key:
+                        return str(option.prompt)
+                raise AssertionError(f"no option {key}")
+
+            assert "contributors" in prompt_of("souls")  # roomy by default
+            await pilot.press("d")  # compact: names only
+            await pilot.pause()
+            assert "contributors" not in prompt_of("souls")
+            assert app.current_op.key == "souls"  # selection survives the rebuild
+            await pilot.press("d")  # roomy again
+            await pilot.pause()
+            assert "contributors" in prompt_of("souls")
+            assert app.current_op.key == "souls"
+
+    asyncio.run(scenario())
+
+
 def test_ritual_name_and_status_are_separate_areas(necropolis):
     async def scenario() -> None:
         app = ReaperApp(source=str(necropolis))

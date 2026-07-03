@@ -108,12 +108,17 @@ class ReapResult:
 class Operation:
     """One ritual the TUI can perform against a resolved source."""
 
-    key: str  # stable id, used in labels, schema strings, and tests
-    label: str  # what the menu shows
+    key: str  # stable id -- also the ritual's name in the menu
+    description: str  # one-line summary, shown under the name in the menu
     group: str  # sidebar section
     needs_git: bool  # history rituals require a real repo
     run: Callable[[RepoRef, dict[str, Any]], ReapResult]
     options: tuple[OptSpec, ...] = field(default_factory=tuple)
+
+    @property
+    def label(self) -> str:
+        """Name and description on one line -- the header above the options."""
+        return f"{self.key} - {self.description}"
 
     def defaults(self) -> dict[str, Any]:
         """The default option values -- what a reap uses before the user edits."""
@@ -308,17 +313,17 @@ def _plague(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
 OPERATIONS: list[Operation] = [
     Operation(
         "limbs",
-        "limbs - hierarchical file listing",
+        "hierarchical file listing",
         "reaping",
         False,
         _limbs,
         (_format_opt("md", "json"),),
     ),
-    Operation("harvest", "harvest - gather *.md into one artifact", "reaping", False, _harvest),
-    Operation("conjure", "conjure - bundle the repo for an LLM", "packing", False, _conjure),
+    Operation("harvest", "gather *.md into one artifact", "reaping", False, _harvest),
+    Operation("conjure", "bundle the repo for an LLM", "packing", False, _conjure),
     Operation(
         "census",
-        "census - file-type census",
+        "file-type census",
         "packing",
         False,
         _census,
@@ -326,7 +331,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "unfinished",
-        "unfinished - TODO/FIXME/HACK/XXX",
+        "TODO/FIXME/HACK/XXX",
         "packing",
         False,
         _unfinished,
@@ -334,7 +339,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "bones",
-        "bones - structure without the flesh",
+        "structure without the flesh",
         "packing",
         False,
         _bones,
@@ -342,7 +347,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "chronicle",
-        "chronicle - commit history",
+        "commit history",
         "necromancy",
         True,
         _chronicle,
@@ -350,7 +355,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "souls",
-        "souls - contributors",
+        "contributors",
         "necromancy",
         True,
         _souls,
@@ -358,7 +363,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "haunt",
-        "haunt - churn hotspots",
+        "churn hotspots",
         "necromancy",
         True,
         _haunt,
@@ -366,7 +371,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "graveyard",
-        "graveyard - files that lived and died",
+        "files that lived and died",
         "necromancy",
         True,
         _graveyard,
@@ -374,7 +379,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "rot",
-        "rot - staleness report",
+        "staleness report",
         "necromancy",
         True,
         _rot,
@@ -382,7 +387,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "ghosts",
-        "ghosts - branch hygiene",
+        "branch hygiene",
         "necromancy",
         True,
         _ghosts,
@@ -390,7 +395,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "tombstone",
-        "tombstone - the stats card",
+        "the stats card",
         "necromancy",
         True,
         _tombstone,
@@ -398,7 +403,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "doppelgangers",
-        "doppelgangers - duplicate files",
+        "duplicate files",
         "forensics",
         False,
         _doppelgangers,
@@ -406,7 +411,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "bloat",
-        "bloat - the heaviest bodies",
+        "the heaviest bodies",
         "forensics",
         False,
         _bloat,
@@ -414,7 +419,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "exhume",
-        "exhume - secrets in the history",
+        "secrets in the history",
         "dark arts",
         True,
         _exhume,
@@ -422,7 +427,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "omens",
-        "omens - composite risk prophecy",
+        "composite risk prophecy",
         "dark arts",
         True,
         _omens,
@@ -434,7 +439,7 @@ OPERATIONS: list[Operation] = [
     ),
     Operation(
         "plague",
-        "plague - dependency advisories",
+        "dependency advisories",
         "dark arts",
         False,
         _plague,
