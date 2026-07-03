@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-02
+
+The Communion: the reaper learns to speak with agents.
+
 ### Added
 
 - **The Communion (`reaper commune`).** git-reaper as an MCP server, behind
@@ -26,12 +30,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `reaper commune (census)`) via a context-scoped invoker.
 - **`reaper pulse`** now reports the `[mcp]` extra.
 - **Descriptions toggle (`d`).** The TUI rituals list can be flipped between
-  the roomy two-line layout and a compact names-only view. The selected
-  ritual and the graying of git-only rituals both survive the flip; the key
-  is listed in the footer and the `?` help screen.
+  a compact names-only view (the default) and the roomy two-line layout with
+  a dimmed description beneath each name. The selected ritual and the
+  graying of git-only rituals both survive the flip; the key is listed in
+  the footer and the `?` help screen.
+- **The grim reaper takes the stage.** The gallery gains a full hooded
+  figure -- blade arcing over the cowl, skeletal grip on the shaft, tattered
+  hem trailing into the mist (per the ASCII brief) -- plus a hooded visage
+  for skinny terminals, both summonable via the hidden `reaper boo`.
 
 ### Changed
 
+- **Art hangs in a gallery now.** The art module became a data-driven
+  package: each piece lives in its own text file under
+  `art/gallery/` (the `boo()` pool, auto-discovered) or `art/seasonal/`,
+  retrieved by name through a cached `piece()` loader. Dropping a `.txt`
+  into the gallery makes it discovered, served, and tested with no code
+  change.
 - **Room to breathe.** The TUI rituals list now shows each ritual's name on
   its own line with a dimmed description beneath, instead of the cramped
   `name - description` one-liner. `tui_ops.Operation` splits its `label`
@@ -306,7 +321,8 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jmcmeen/git-reaper/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jmcmeen/git-reaper/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/jmcmeen/git-reaper/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jmcmeen/git-reaper/compare/v0.2.0...v0.3.0
