@@ -267,3 +267,34 @@ def test_fleet_distill_writes_a_routing_index_skill(tmp_path):
     assert "| [alpha](alpha/SKILL.md) | /graves/alpha | How to work in alpha. |" in index_skill
     assert "Not harvested" in index_skill and "omega" in index_skill
     assert result.index.endswith("INDEX.md")  # the plain index still exists
+
+
+def test_derive_name_handles_windows_sources():
+    from git_reaper.models import RepoRef
+
+    ref = RepoRef(source="C:\\Users\\x\\necropolis", kind="local", path="C:\\Users\\x\\necropolis")
+    assert distill_core.derive_name(ref) == "necropolis"
+    dot = RepoRef(source=".", kind="local", path="/home/x/crypt")
+    assert distill_core.derive_name(dot) == "crypt"
+
+
+def test_workflow_commands_skip_ci_plumbing(tmp_path):
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text(
+        "jobs:\n"
+        "  test:\n"
+        "    steps:\n"
+        "      - run: pip install uv\n"
+        "      - run: uv sync --dev\n"
+        "      - run: uv run pytest\n",
+        encoding="utf-8",
+    )
+    commands = distill_core._workflow_commands(workflows)
+    assert [(c.kind, c.command) for c in commands] == [("test", "uv run pytest")]
+
+
+def test_polish_timeout_is_a_clear_error():
+    slow = f'{sys.executable} -c "import time; time.sleep(5)"'
+    with pytest.raises(distill_core.SkillError, match="timed out"):
+        distill_core.polish_bundle({"SKILL.md": "<!--\nx\n-->\nbody\n"}, slow, timeout=0.5)

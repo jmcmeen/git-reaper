@@ -134,7 +134,7 @@ def distill(
     souls = history_core.souls(repo, backend=backend, invoked=invoked, generated=generated)
     haunt = history_core.haunt(repo, backend=backend, invoked=invoked, generated=generated)
 
-    fixes_by_path = _bugfix_counts(repo, backend)
+    fixes_by_path, bug_themes = _bugfix_signal(repo, backend)
     gotchas = [
         Gotcha(
             path=spot.path,
@@ -183,7 +183,7 @@ def distill(
         commit_prefixes=dict(prefixes.most_common()),
         conventional_share=round(conventional, 3),
         gotchas=gotchas,
-        bug_themes=_bug_themes(repo, backend),
+        bug_themes=bug_themes,
         marker_counts=unfinished.counts,
         owners=owners,
         bus_factor=souls.bus_factor,
@@ -217,26 +217,26 @@ def _layout(root: Path) -> list[str]:
     return dirs + files
 
 
-def _bugfix_counts(repo: RepoRef, backend: GitBackend) -> dict[str, int]:
-    """Per-file bug-fix commit counts, via the same regex omens uses."""
+def _bugfix_signal(
+    repo: RepoRef, backend: GitBackend, top: int = 10
+) -> tuple[dict[str, int], dict[str, int]]:
+    """One pass over history: per-file fix counts and the recurring fix words.
+
+    Uses the same regex omens does. A single `backend.log` walk serves both
+    signals so distill stays one pass, not two, over a large history.
+    """
     counts: Counter[str] = Counter()
-    for commit in backend.log(Path(repo.path), ref=repo.ref):
-        if BUGFIX.search(commit.subject):
-            for change in commit.files:
-                counts[change.path] += 1
-    return dict(counts)
-
-
-def _bug_themes(repo: RepoRef, backend: GitBackend, top: int = 10) -> dict[str, int]:
-    """Recurring words in bug-fix subjects: the failure themes that repeat."""
     words: Counter[str] = Counter()
     for commit in backend.log(Path(repo.path), ref=repo.ref):
         if not BUGFIX.search(commit.subject):
             continue
+        for change in commit.files:
+            counts[change.path] += 1
         for word in re.findall(r"[a-z][a-z0-9_-]{2,}", commit.subject.lower()):
             if word not in _STOPWORDS:
                 words[word] += 1
-    return {word: n for word, n in words.most_common(top) if n > 1}
+    themes = {word: n for word, n in words.most_common(top) if n > 1}
+    return dict(counts), themes
 
 
 # --------------------------------------------------------------------------
@@ -345,6 +345,13 @@ def _package_json_commands(path: Path) -> list[CommandHint]:
     ]
 
 
+#: CI steps that are environment plumbing, not commands a developer would run.
+_CI_NOISE = re.compile(
+    r"(?i)\b(pip install|pipx install|uv sync|uv pip|npm (ci|install)|yarn install"
+    r"|pnpm install|apt(-get)? |brew install|choco install|curl |wget )"
+)
+
+
 def _workflow_commands(workflows: Path) -> list[CommandHint]:
     """`run:` one-liners from CI workflows: what the build actually executes."""
     if not workflows.is_dir():
@@ -358,6 +365,8 @@ def _workflow_commands(workflows: Path) -> list[CommandHint]:
             command = match.group(1).strip()
             if command in ("|", ">") or command.startswith(("|", ">")):
                 continue  # multi-line scripts are CI plumbing, not a recipe
+            if _CI_NOISE.search(command):
+                continue  # setup steps teach nothing about working here
             kind = "other"
             for probe, k in (
                 ("lint", "lint"),
@@ -408,8 +417,13 @@ def read_stamp(skill_dir: Path) -> SkillStamp:
 #: The stamp closes here; everything before it is protected from the polisher.
 _STAMP_CLOSE = "\n-->\n"
 
+#: A polisher that says nothing for this long is hung, not thinking.
+POLISH_TIMEOUT = 300.0
 
-def polish_bundle(bundle: dict[str, str], command: str) -> dict[str, str]:
+
+def polish_bundle(
+    bundle: dict[str, str], command: str, timeout: float = POLISH_TIMEOUT
+) -> dict[str, str]:
     """Pipe each draft's prose through the caller's own command, stdin to stdout.
 
     The default distill path never needs a key; this is the opt-in escape
@@ -429,9 +443,15 @@ def polish_bundle(bundle: dict[str, str], command: str) -> dict[str, str]:
     for rel in sorted(bundle):
         head, body = _split_stamp(bundle[rel])
         try:
-            proc = subprocess.run(argv, input=body, capture_output=True, text=True)
+            # The argv is the caller's own trusted command, by design (no shell);
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+            proc = subprocess.run(argv, input=body, capture_output=True, text=True, timeout=timeout)
         except OSError as exc:
             raise SkillError(f"polish command failed to start: {exc}") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise SkillError(
+                f"polish timed out on {rel} after {int(timeout)}s; the command hung"
+            ) from exc
         if proc.returncode != 0:
             detail = proc.stderr.strip().splitlines()
             hint = f": {detail[-1]}" if detail else ""

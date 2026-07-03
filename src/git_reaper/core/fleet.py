@@ -193,7 +193,8 @@ def _skill_description(skill_md: Path) -> str:
     for line in text.splitlines()[:10]:  # frontmatter lives at the top
         match = _DESCRIPTION.match(line)
         if match:
-            return match.group(1)
+            # Escape for the table cell it lands in: pipes and newlines corrupt it.
+            return match.group(1).replace("|", "\\|").strip()
     return ""
 
 
