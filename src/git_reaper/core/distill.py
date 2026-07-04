@@ -29,6 +29,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+from git_reaper import fsutil
 from git_reaper.core import census as census_core
 from git_reaper.core import history as history_core
 from git_reaper.core import scan as scan_core
@@ -192,6 +193,24 @@ def distill(
     result.provenance.files = census.total_files
     result.provenance.token_estimate = census.token_estimate
     return result
+
+
+def write_bundle(bundle: dict[str, str], target: Path, archive: str | None = None) -> Path:
+    """Write a distilled bundle's files under target, sorted for determinism.
+
+    archive, one of fsutil.ARCHIVE_FORMATS, packages target into a single
+    file instead of leaving it as a loose directory. Returns the final path
+    (target itself, or the archive when one was requested).
+    """
+    for rel, content in sorted(bundle.items()):
+        path = target / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    if archive:
+        archived = fsutil.make_archive(target, archive)
+        fsutil.force_rmtree(target)
+        return archived
+    return target
 
 
 def _description(name: str, census: CensusResult, profile: str) -> str:

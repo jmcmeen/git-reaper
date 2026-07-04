@@ -8,6 +8,7 @@ import fails.
 from git_reaper.tui.altar import AltarScreen
 from git_reaper.tui.app import CHAMBERS, ReaperApp, run_tui
 from git_reaper.tui.console import ConsoleScreen
+from git_reaper.tui.coven import CovenScreen
 from git_reaper.tui.crypt import CryptMapScreen
 from git_reaper.tui.grimoire import GrimoireScreen
 from git_reaper.tui.necropolis import NecropolisScreen
@@ -27,6 +28,7 @@ __all__ = [
     "AltarScreen",
     "BrowseScreen",
     "ConsoleScreen",
+    "CovenScreen",
     "CryptMapScreen",
     "GrimoireScreen",
     "HelpScreen",

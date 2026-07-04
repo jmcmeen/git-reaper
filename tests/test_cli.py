@@ -319,6 +319,22 @@ def test_exhume_baseline_flow(make_repo, tmp_path):
     assert gated.exit_code == 0  # every finding is baselined
 
 
+def test_exhume_since_flag_scans_only_new_blobs(make_history):
+    root = make_history(
+        [
+            {"message": "old secret", "write": {"a.txt": f"{AWS_KEY}\n"}, "tag": "v1"},
+            {"message": "new secret", "write": {"b.txt": "ghp_" + "a1B2" * 9 + "\n"}},
+        ]
+    )
+    result = runner.invoke(
+        app, ["--plain", "exhume", str(root), "--since", "v1", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["scanned_since"] == "v1"
+    assert {f["rule"] for f in data["findings"]} == {"github-token"}
+
+
 def test_veil_reads_stdin_writes_stdout():
     result = runner.invoke(app, ["--plain", "veil", "-"], input=f"key={AWS_KEY}\n")
     assert result.exit_code == 0
@@ -430,6 +446,35 @@ def test_necropolis_cli(make_repo, tmp_path):
     assert result.exit_code == 0
     assert (out_dir / "alpha.md").is_file()
     assert "1 of 1 graves reaped" in (out_dir / "INDEX.md").read_text()
+
+
+def test_necropolis_cli_zip_format(make_repo, tmp_path):
+    import zipfile
+
+    alpha = make_repo(FILES, name="alpha")
+    manifest = tmp_path / "necropolis.toml"
+    manifest.write_text(f'[[grave]]\nsource = "{alpha.as_posix()}"\n')
+    out_dir = tmp_path / "fleet"
+    result = runner.invoke(
+        app,
+        [
+            "--plain",
+            "necropolis",
+            "census",
+            "--manifest",
+            str(manifest),
+            "--out-dir",
+            str(out_dir),
+            "--format",
+            "zip",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert not out_dir.exists()
+    archive = out_dir.with_name("fleet.zip")
+    assert archive.is_file()
+    with zipfile.ZipFile(archive) as zf:
+        assert "fleet/alpha.md" in zf.namelist()
 
 
 def test_necropolis_refuses_recursion(tmp_path):

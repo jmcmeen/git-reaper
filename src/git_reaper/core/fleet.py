@@ -25,6 +25,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
+from git_reaper import fsutil
 from git_reaper.core.scavenge import skill_description
 from git_reaper.models import GraveOutcome, NecropolisResult
 
@@ -126,8 +127,15 @@ def necropolis(
     out_dir: Path,
     runner: Runner,
     tag: str | None = None,
+    archive: str | None = None,
 ) -> NecropolisResult:
-    """Run `reaper <command> <grave> <args> --out <dir>/<name>.<ext>` per grave."""
+    """Run `reaper <command> <grave> <args> --out <dir>/<name>.<ext>` per grave.
+
+    archive, one of fsutil.ARCHIVE_FORMATS, packages the whole out_dir (every
+    grave's artifact plus INDEX.md/SKILL.md) into a single file afterward;
+    this is separate from any --format a fanned-out sub-command carries in
+    args, which only affects that sub-command's own per-grave artifact.
+    """
     chosen = [g for g in graves if tag is None or tag in g.tags]
     result = NecropolisResult(command=command)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -159,6 +167,10 @@ def necropolis(
     result.index = str(index)
     if bundle:
         (out_dir / "SKILL.md").write_text(render_index_skill(result, out_dir), encoding="utf-8")
+    if archive:
+        archived = fsutil.make_archive(out_dir, archive)
+        fsutil.force_rmtree(out_dir)
+        result.archive = str(archived)
     return result
 
 

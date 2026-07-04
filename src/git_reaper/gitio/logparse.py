@@ -108,9 +108,10 @@ def tag_ref_args() -> list[str]:
     return [*_QUOTEPATH, "for-each-ref", f"--format={_TAG_FORMAT}", "refs/tags"]
 
 
-def object_list_args() -> list[str]:
-    """Every object reachable from any ref, blobs and trees carrying a path."""
-    return [*_QUOTEPATH, "rev-list", "--all", "--objects"]
+def object_list_args(ref: str | None = None) -> list[str]:
+    """Every object reachable from `ref` (a rev, or an `A..B` range), blobs
+    and trees carrying a path. `None` walks every ref (`--all`)."""
+    return [*_QUOTEPATH, "rev-list", ref or "--all", "--objects"]
 
 
 def batch_check_args() -> list[str]:

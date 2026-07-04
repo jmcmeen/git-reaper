@@ -209,16 +209,22 @@ def _conjure(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
 
 def _scavenge(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     out_dir = Path(str(opts.get("out") or "").strip() or "skill-crypt")
-    result = scavenge_core.scavenge(repo, out_dir, invoked=_invoked("scavenge"))
+    fmt = opts["format"]
+    archive = fmt if fmt in fsutil.ARCHIVE_FORMATS else None
+    result = scavenge_core.scavenge(repo, out_dir, invoked=_invoked("scavenge"), archive=archive)
     if not result.skills:
         summary = "the graves were empty"
         text = f"No {scavenge_core.MARKER} anywhere in the source; nothing was written.\n"
     else:
-        summary = f"{len(result.skills)} skills interred in {out_dir}"
-        # The artifact is the routing index the scavenge just wrote: the loot,
-        # exactly as an agent will read it.
+        summary = (
+            f"{len(result.skills)} skills packaged into {result.out}"
+            if archive
+            else f"{len(result.skills)} skills interred in {out_dir}"
+        )
+        # Rendered straight from result, not re-read from disk, so this still
+        # works when the crypt was archived and out_dir no longer exists.
         text = scavenge_core.render_crypt_skill(result, out_dir)
-    if opts["format"] == "json":
+    if fmt == "json":
         text = jsonfmt.render(result)
     return ReapResult(text, summary)
 
@@ -356,8 +362,13 @@ def _bloat(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
 
 def _exhume(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     rules = rules_core.load_rules(config.custom_rules())
+    since = str(opts.get("since") or "").strip() or None
     result = rules_core.exhume(
-        repo, rules=rules, with_entropy=not opts["no_entropy"], invoked=_invoked("exhume")
+        repo,
+        rules=rules,
+        with_entropy=not opts["no_entropy"],
+        since_ref=since,
+        invoked=_invoked("exhume"),
     )
     text = _dispatch("exhume", result, opts["format"], markdown.render_exhume)
     summary = f"{len(result.findings)} findings, {result.blobs_scanned} blobs scanned"
@@ -494,7 +505,7 @@ OPERATIONS: list[Operation] = [
         _scavenge,
         (
             TextOpt("out", "out (the library directory)", default="skill-crypt"),
-            _format_opt("md", "json"),
+            _format_opt("md", "json", *fsutil.ARCHIVE_FORMATS),
         ),
         writes=True,
     ),
@@ -615,7 +626,11 @@ OPERATIONS: list[Operation] = [
         "dark arts",
         True,
         _exhume,
-        (ToggleOpt("no_entropy", "no entropy (signatures only)"), _format_opt(*_ALL_FORMATS)),
+        (
+            ToggleOpt("no_entropy", "no entropy (signatures only)"),
+            TextOpt("since", "since (ref: only blobs new since it)"),
+            _format_opt(*_ALL_FORMATS),
+        ),
     ),
     Operation(
         "veil",

@@ -21,6 +21,7 @@ from git_reaper.tui import (
     AltarScreen,
     BrowseScreen,
     ConsoleScreen,
+    CovenScreen,
     CryptMapScreen,
     GrimoireScreen,
     HelpScreen,
@@ -77,6 +78,7 @@ def test_every_door_opens_and_escape_returns(necropolis):
             expected = {
                 "altar": AltarScreen,
                 "grimoire": GrimoireScreen,
+                "coven": CovenScreen,
                 "console": ConsoleScreen,
                 "necropolis": NecropolisScreen,
                 "reliquary": ReliquaryScreen,
@@ -103,7 +105,8 @@ def test_number_keys_jump_between_chambers(necropolis):
             await pilot.press("2")
             await pilot.pause()
             assert isinstance(app.screen, GrimoireScreen)
-            await pilot.press("5")
+            reliquary_key = str([name for name, *_ in CHAMBERS].index("reliquary") + 1)
+            await pilot.press(reliquary_key)
             await pilot.pause()
             assert isinstance(app.screen, ReliquaryScreen)
 
@@ -466,6 +469,88 @@ def test_grimoire_loads_and_deletes_an_existing_recipe(tmp_path, monkeypatch):
             grimoire.action_delete_recipe()
             await pilot.pause()
             assert config.find_recipe("old", root=tmp_path) is None
+
+    asyncio.run(scenario())
+
+
+# -- the coven ----------------------------------------------------------------------
+
+
+def test_coven_composes_and_inscribes_a_rite(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    async def scenario() -> None:
+        app = ReaperApp(source=".")
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            coven = await _enter(app, pilot, "coven")
+            coven.query_one("#rite-name", Input).value = "audit"
+            coven.query_one("#step-command", Select).value = "census"
+            await pilot.pause()
+            await coven._add_step_button()
+            coven.query_one("#step-command", Select).value = "chronicle"
+            await pilot.pause()
+            line = str(coven.query_one("#rite-incantation", Label).render())
+            assert "reaper census '{source}'" in line
+            assert "reaper chronicle '{source}'" in line
+            assert "reaper perform audit ." in line
+            coven.action_save_rite()
+            await pilot.pause()
+            saved = config.find_rite("audit", root=tmp_path)
+            assert saved is not None
+            assert [s.command for s in saved.steps] == ["census", "chronicle"]
+            assert all("{source}" in s.args for s in saved.steps)
+
+    asyncio.run(scenario())
+
+
+def test_coven_loads_and_deletes_an_existing_rite(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    config.save_rite(
+        config.Rite(
+            name="old",
+            steps=[config.RiteStep(command="census", args=["{source}", "--format", "json"])],
+        ),
+        root=tmp_path,
+    )
+
+    async def scenario() -> None:
+        app = ReaperApp(source=".")
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            coven = await _enter(app, pilot, "coven")
+            rites = coven.query_one("#rites", OptionList)
+            assert rites.option_count == 2  # (new rite) + old
+            rites.focus()
+            rites.highlighted = 1
+            await pilot.press("enter")
+            await pilot.pause()
+            assert coven.query_one("#rite-name", Input).value == "old"
+            assert coven.current_op.key == "census"
+            assert coven.query_one("#opt-format", Select).value == "json"
+            coven.action_delete_rite()
+            await pilot.pause()
+            assert config.find_rite("old", root=tmp_path) is None
+
+    asyncio.run(scenario())
+
+
+def test_coven_runs_a_rite_across_its_steps(necropolis):
+    async def scenario() -> None:
+        app = ReaperApp(source=str(necropolis))
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            coven = await _enter(app, pilot, "coven")
+            coven.query_one("#rite-name", Input).value = "quick"
+            coven.query_one("#rite-sources", Input).value = str(necropolis)
+            coven.query_one("#step-command", Select).value = "census"
+            await pilot.pause()
+            coven.action_run()
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            table = coven.query_one("#results", DataTable)
+            assert table.row_count == 1
+            assert coven._artifacts  # the drill-in preview has something to show
 
     asyncio.run(scenario())
 

@@ -117,6 +117,24 @@ def test_one_failed_grave_does_not_stop_the_fleet(tmp_path):
     assert fleet.fleet_exit_code(result) == 1  # a failure outranks a curse
 
 
+def test_necropolis_archive_packages_the_out_dir(tmp_path):
+    import zipfile
+
+    graves = [
+        fleet.Grave(name="alpha", source="/graves/alpha"),
+        fleet.Grave(name="beta", source="/graves/beta"),
+    ]
+    out_dir = tmp_path / "out"
+    result = fleet.necropolis(
+        "census", ["--format", "json"], graves, out_dir, _fake_runner({}), archive="zip"
+    )
+    assert not out_dir.exists()
+    assert result.archive == str(out_dir.with_name("out.zip"))
+    with zipfile.ZipFile(result.archive) as zf:
+        names = zf.namelist()
+        assert "out/alpha.json" in names and "out/INDEX.md" in names
+
+
 def test_curse_without_failure_exits_3(tmp_path):
     graves = [fleet.Grave(name="cursed", source="/g/cursed")]
     runner = _fake_runner({"/g/cursed": 3})

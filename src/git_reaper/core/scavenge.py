@@ -71,9 +71,14 @@ def _source_name(source: str) -> str:
     return tail.removesuffix(".git") or "skill"
 
 
-def _copy_skill(src: Path, dest: Path, root: Path, matcher: IgnoreMatcher) -> int:
-    """Copy one skill folder byte-for-byte, honoring ignore rules; the file count."""
+def _copy_skill(src: Path, dest: Path, root: Path, matcher: IgnoreMatcher) -> tuple[int, list[str]]:
+    """Copy one skill folder byte-for-byte, honoring ignore rules.
+
+    Returns the file count and the POSIX paths (relative to src) of any
+    files that sniffed as binary - the report calls those out by name.
+    """
     copied = 0
+    binaries: list[str] = []
 
     def _walk(directory: Path) -> None:
         nonlocal copied
@@ -91,9 +96,11 @@ def _copy_skill(src: Path, dest: Path, root: Path, matcher: IgnoreMatcher) -> in
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(entry, target)  # bytes, not text: binaries survive
                 copied += 1
+                if fsutil.is_binary(entry):
+                    binaries.append(entry.relative_to(src).as_posix())
 
     _walk(src)
-    return copied
+    return copied, sorted(binaries)
 
 
 def scavenge(
@@ -102,12 +109,17 @@ def scavenge(
     excludes: list[str] | None = None,
     invoked: str = "reaper scavenge",
     generated: str | None = None,
+    archive: str | None = None,
 ) -> ScavengeResult:
     """Lift every skill folder out of the repo into out_dir, and index the loot.
 
     Re-scavenging refreshes: a skill already in the crypt under the same name
     is replaced, not numbered. Numbering only separates two skills that share
     a folder name within one repo. Finding nothing writes nothing.
+
+    archive, one of fsutil.ARCHIVE_FORMATS, packages the crypt into a single
+    file instead of leaving it as a loose directory; result.out then points
+    at the archive.
     """
     root = Path(repo.path)
     matcher = IgnoreMatcher(root, extra_excludes=excludes)
@@ -131,17 +143,22 @@ def scavenge(
         if dest.exists():
             fsutil.force_rmtree(dest)
         src = root if rel == "." else root / rel
-        copied = _copy_skill(src, dest, root, matcher)
+        copied, binaries = _copy_skill(src, dest, root, matcher)
         result.skills.append(
             ScavengedSkill(
                 name=name,
                 path=rel,
                 description=skill_description(src / MARKER),
                 files=copied,
+                binary=binaries,
             )
         )
 
     (out_dir / MARKER).write_text(render_crypt_skill(result, out_dir), encoding="utf-8")
+    if archive:
+        archived = fsutil.make_archive(out_dir, archive)
+        fsutil.force_rmtree(out_dir)
+        result.out = str(archived)
     return result
 
 
@@ -174,4 +191,9 @@ def render_crypt_skill(result: ScavengeResult, out_dir: Path) -> str:
         lines.append(
             f"| [{skill.name}]({skill.name}/{MARKER}) | {skill.path} | {skill.description} |"
         )
+    haunted = [skill for skill in result.skills if skill.binary]
+    if haunted:
+        lines += ["", "## Binary assets carried along", ""]
+        for skill in haunted:
+            lines.append(f"- **{skill.name}**: {', '.join(skill.binary)}")
     return "\n".join(lines) + "\n"

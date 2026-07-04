@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -157,6 +158,28 @@ def test_cli_writes_the_bundle_and_check_round_trips(make_history):
     _git("commit", "-m", "feat: move on", cwd=root)
     stale = runner.invoke(app, ["--plain", "distill", "--check", str(skill)])
     assert stale.exit_code == 3, stale.output
+
+
+def test_cli_distill_zip_format(make_history, tmp_path):
+    root = _history_repo(make_history)
+    skill = tmp_path / "necro"
+    result = runner.invoke(
+        app, ["--plain", "distill", str(root), "--out", str(skill), "--format", "zip"]
+    )
+    assert result.exit_code == 0, result.output
+    assert not skill.exists()
+    archive = skill.with_name("necro.zip")
+    assert archive.is_file()
+    with zipfile.ZipFile(archive) as zf:
+        assert "necro/SKILL.md" in zf.namelist()
+
+
+def test_write_bundle_archives_and_returns_the_archive_path(tmp_path):
+    target = tmp_path / "necro"
+    written = distill_core.write_bundle({"SKILL.md": "hi\n"}, target, archive="tar.gz")
+    assert not target.exists()
+    assert written == target.with_name("necro.tar.gz")
+    assert written.is_file()
 
 
 def test_check_refuses_a_directory_without_a_skill(tmp_path):

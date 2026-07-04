@@ -299,6 +299,7 @@ def _exhume_sections(result: ExhumeResult) -> tuple[list[Section], str]:
     footer = (
         f"{len(result.findings)} findings, {result.blobs_scanned} blobs scanned, "
         f"{result.suppressed} baselined"
+        + (f", new since {result.scanned_since}" if result.scanned_since else "")
     )
     headers = ["severity", "rule", "where", "preview", "commit", "author"]
     return [("", headers, rows, None)], footer

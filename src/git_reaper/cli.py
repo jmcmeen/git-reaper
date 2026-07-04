@@ -21,6 +21,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from git_reaper import __version__, art, cache, config, fsutil, schemas
+from git_reaper import rite as rite_core
 from git_reaper.core import banshee as banshee_core
 from git_reaper.core import census as census_core
 from git_reaper.core import dedupe as dedupe_core
@@ -54,7 +55,7 @@ from git_reaper.core import ward as ward_core
 from git_reaper.core.source import ResolvedSource, resolve_source
 from git_reaper.formatters import csvfmt, htmlfmt, jsonfmt, markdown, svgfmt
 from git_reaper.gitio import GitError
-from git_reaper.models import Recipe, RepoRef
+from git_reaper.models import Recipe, RepoRef, Rite
 from git_reaper.theme import make_console, theme_enabled
 
 
@@ -588,6 +589,51 @@ def cast_cmd(
         raise typer.Exit(code=code)
 
 
+def _find_rite(name: str) -> Rite:
+    """A named rite, or a themed death."""
+    try:
+        found = config.find_rite(name)
+    except config.GrimoireError as exc:
+        raise _die(str(exc)) from exc
+    if found is None:
+        raise _die(f"no rite named {name!r}", "`reaper grimoire` lists what is inscribed")
+    return found
+
+
+@app.command("perform")
+def perform_cmd(
+    name: str | None = typer.Argument(None, help="Rite name from the grimoire."),
+    sources: list[str] = typer.Argument(
+        None, help="Sources to run the rite against (default: '.')."
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Run a saved rite: its steps, in order, against one or more sources."""
+    if schema:
+        _print_schema("perform")
+        return
+    if name is None:
+        raise _die("no rite given", "`reaper grimoire` lists what is inscribed")
+    _validate_format(fmt)
+    _banner()
+    a_rite = _find_rite(name)
+    try:
+        result = rite_core.perform_rite(a_rite, sources or None, plain=state.plain)
+    except rite_core.RiteError as exc:
+        raise _die(str(exc)) from exc
+    ok_count = sum(1 for o in result.outcomes if o.ok)
+    style = "necro" if result.ok else "blood"
+    _say(style, f"performed {name!r}: {ok_count}/{len(result.outcomes)} steps ok")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_rite(result), out)
+    if not result.ok:
+        raise typer.Exit(code=1)
+
+
 # --------------------------------------------------------------------------
 # git necromancy: chronicle, souls, haunt, autopsy, graveyard, resurrect,
 # ghosts, rot, tombstone. History needs a full clone, so remote sources are
@@ -907,6 +953,9 @@ def exhume_cmd(
     no_entropy: bool = typer.Option(
         False, "--no-entropy", help="Signatures only; skip the entropy sweep."
     ),
+    since: str | None = typer.Option(
+        None, "--since", help="Only blobs new since this ref (incremental rescan)."
+    ),
     fmt: str = typer.Option("md", "--format", "-f", help="md, json, csv, or html."),
     out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
     ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
@@ -934,6 +983,7 @@ def exhume_cmd(
             rules=rules,
             with_entropy=not no_entropy,
             baseline=known,
+            since_ref=since,
             invoked=_invocation(),
         )
     except GitError as exc:
@@ -945,7 +995,8 @@ def exhume_cmd(
     _say(
         "necro",
         f"scanned {result.blobs_scanned} blobs: {len(result.findings)} findings"
-        + (f", {result.suppressed} baselined" if result.suppressed else ""),
+        + (f", {result.suppressed} baselined" if result.suppressed else "")
+        + (f" (new since {since})" if since else ""),
     )
     if fmt == "json":
         _emit(jsonfmt.render(result), out)
@@ -1296,7 +1347,12 @@ def distill_cmd(
         "a `claude -p` wrapper. Stamps and frontmatter are preserved; the default "
         "path never needs a key.",
     ),
-    fmt: str = typer.Option("md", "--format", "-f", help="md, or json to also print the result."),
+    fmt: str = typer.Option(
+        "md",
+        "--format",
+        "-f",
+        help="md, json to also print the result, or zip/tar/tar.gz to archive the bundle.",
+    ),
     ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
     schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
 ) -> None:
@@ -1304,7 +1360,7 @@ def distill_cmd(
     if schema:
         _print_schema("distill")
         return
-    _validate_format(fmt)
+    _validate_format(fmt, ("md", "json", *fsutil.ARCHIVE_FORMATS))
     _banner()
     if check is not None:
         _distill_check(check)
@@ -1335,12 +1391,19 @@ def distill_cmd(
             raise _die(str(exc), hint) from exc
         _say("necro", f"polished {len(bundle)} drafts through `{polish}`")
     target = out if out is not None else Path("skills") / result.name
-    for rel, content in sorted(bundle.items()):
-        path = target / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-    _say("necro", f"distilled {result.name} ({result.profile}): {len(bundle)} files in {target}")
-    _say("ash", f"freshness: `reaper distill --check {target}` once the code moves on")
+    archive = fmt if fmt in fsutil.ARCHIVE_FORMATS else None
+    written = distill_core.write_bundle(bundle, target, archive=archive)
+    if archive:
+        _say(
+            "necro",
+            f"distilled {result.name} ({result.profile}): "
+            f"{len(bundle)} files packaged into {written}",
+        )
+    else:
+        _say(
+            "necro", f"distilled {result.name} ({result.profile}): {len(bundle)} files in {written}"
+        )
+        _say("ash", f"freshness: `reaper distill --check {written}` once the code moves on")
     if fmt == "json":
         _emit(jsonfmt.render(result), None)
 
@@ -1377,7 +1440,12 @@ def scavenge_cmd(
     exclude: list[str] = typer.Option([], "--exclude", "-x", help="Glob(s) to skip."),
     ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha (remote sources)."),
     depth: int = typer.Option(1, "--depth", help="Clone depth for remote sources."),
-    fmt: str = typer.Option("md", "--format", "-f", help="md, or json to also print the result."),
+    fmt: str = typer.Option(
+        "md",
+        "--format",
+        "-f",
+        help="md, json to also print the result, or zip/tar/tar.gz to archive the crypt.",
+    ),
     schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
 ) -> None:
     """Scavenge existing Agent Skill folders out of a repo into a library.
@@ -1389,12 +1457,19 @@ def scavenge_cmd(
     if schema:
         _print_schema("scavenge")
         return
-    _validate_format(fmt)
+    _validate_format(fmt, ("md", "json", *fsutil.ARCHIVE_FORMATS))
     _banner()
+    archive = fmt if fmt in fsutil.ARCHIVE_FORMATS else None
     resolved = _resolve(source, ref=ref, depth=depth)
-    result = scavenge_core.scavenge(resolved.repo, out, excludes=exclude, invoked=_invocation())
+    result = scavenge_core.scavenge(
+        resolved.repo, out, excludes=exclude, invoked=_invocation(), archive=archive
+    )
     if not result.skills:
         _say("ember", f"no {scavenge_core.MARKER} anywhere in {source}; the graves were empty")
+    elif archive:
+        for skill in result.skills:
+            _say("necro", f"scavenged {skill.path} ({skill.files} files)")
+        _say("bone", f"{len(result.skills)} skill(s) packaged into {result.out}")
     else:
         for skill in result.skills:
             _say("necro", f"scavenged {skill.path} -> {out / skill.name}  ({skill.files} files)")
@@ -1508,7 +1583,12 @@ def leech_cmd(
     out: Path = typer.Option(Path("leeched"), "--out", "-o", help="Directory for the blocks."),
     lang: str | None = typer.Option(None, "--lang", help="Only blocks in this language."),
     force: bool = typer.Option(False, "--force", help="Write into a non-empty directory."),
-    fmt: str = typer.Option("md", "--format", "-f", help="Report format: md or json."),
+    fmt: str = typer.Option(
+        "md",
+        "--format",
+        "-f",
+        help="Report format: md or json, or archive the blocks as zip/tar/tar.gz.",
+    ),
     schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
 ) -> None:
     """Drain fenced code blocks out of a markdown document into files."""
@@ -1517,8 +1597,9 @@ def leech_cmd(
         return
     if artifact is None:
         raise _die("no document given", "pass a markdown file to leech, or '-' for stdin")
-    _validate_format(fmt)
+    _validate_format(fmt, ("md", "json", *fsutil.ARCHIVE_FORMATS))
     _banner()
+    archive = fmt if fmt in fsutil.ARCHIVE_FORMATS else None
     if artifact == "-":
         text = sys.stdin.read()
         source_name = "-"
@@ -1534,16 +1615,17 @@ def leech_cmd(
         result, contents = leech_core.leech(
             text, source_name, repo, lang=lang, invoked=_invocation()
         )
-        result.out = str(out)
-        leech_core.write_blocks(contents, out, force=force)
+        written = leech_core.write_blocks(contents, out, force=force, archive=archive)
+        result.out = str(written)
     except (leech_core.LeechError, unpack_core.ReanimateError) as exc:
         raise _die(str(exc)) from exc
-    _say("necro", f"drained {len(result.blocks)} blocks into {out}")
+    verb = "packaged into" if archive else "drained into"
+    _say("necro", f"{len(result.blocks)} blocks {verb} {written}")
     if result.skipped:
         _say("ember", f"{result.skipped} blocks skipped by the language filter")
     if fmt == "json":
         _emit(jsonfmt.render(result), None)
-    else:
+    elif not archive:
         _emit(markdown.render_leech(result), None)
 
 
@@ -1867,7 +1949,12 @@ def necropolis_cmd(
     out_dir: Path = typer.Option(
         Path("necropolis"), "--out-dir", help="Directory for per-grave artifacts + INDEX.md."
     ),
-    fmt: str = typer.Option("md", "--format", "-f", help="Index format: md or json."),
+    fmt: str = typer.Option(
+        "md",
+        "--format",
+        "-f",
+        help="Index format: md or json, or zip/tar/tar.gz to archive the whole out-dir.",
+    ),
     schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
 ) -> None:
     """Fan any reaper command across every grave in the manifest."""
@@ -1876,7 +1963,7 @@ def necropolis_cmd(
         return
     if command is None:
         raise _die("no command given", "e.g. `reaper necropolis harvest --tag docs`")
-    _validate_format(fmt)
+    _validate_format(fmt, ("md", "json", *fsutil.ARCHIVE_FORMATS))
     if command in (
         "necropolis",
         "cast",
@@ -1917,17 +2004,20 @@ def necropolis_cmd(
         return 0
 
     passthrough = list(ctx.args)
-    result = fleet_core.necropolis(command, passthrough, graves, out_dir, _runner, tag=tag)
+    archive = fmt if fmt in fsutil.ARCHIVE_FORMATS else None
+    result = fleet_core.necropolis(
+        command, passthrough, graves, out_dir, _runner, tag=tag, archive=archive
+    )
     for outcome in result.graves:
         if outcome.ok:
             _say("necro", f"reaped {outcome.name}")
         else:
             _say("blood", f"{outcome.name}: {outcome.error}")
-    _say(
-        "bone",
-        f"index written to {result.index} "
-        f"({sum(1 for o in result.graves if o.ok)}/{len(result.graves)} reaped)",
-    )
+    reaped = f"{sum(1 for o in result.graves if o.ok)}/{len(result.graves)} reaped"
+    if result.archive:
+        _say("bone", f"packaged into {result.archive} ({reaped})")
+    else:
+        _say("bone", f"index written to {result.index} ({reaped})")
     if fmt == "json":
         _emit(jsonfmt.render(result), None)
     code = fleet_core.fleet_exit_code(result)

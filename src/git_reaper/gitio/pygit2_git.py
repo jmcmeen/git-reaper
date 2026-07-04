@@ -16,6 +16,7 @@ base install stays free of the compiled dependency.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -206,29 +207,56 @@ class Pygit2Git(SubprocessGit):
 
     # -- object mining ---------------------------------------------------------
 
-    def blobs(self, repo: Path) -> list[BlobRecord]:
+    def blobs(self, repo: Path, ref: str | None = None) -> list[BlobRecord]:
         """Every blob reachable from any ref, with one example path, sorted
-        by sha (the same contract as the rev-list + cat-file join)."""
+        by sha (the same contract as the rev-list + cat-file join).
+
+        `ref` narrows the walk the same way `log`'s does: a single rev walks
+        only what it reaches, an `A..B` range walks what `B` reaches minus
+        what `A` already did. `None` walks every ref, as before."""
         gitrepo = self._repo(repo)
         paths: dict[str, str] = {}
         seen_trees: set[str] = set()
         seen_commits: set[str] = set()
-        for name in gitrepo.references:
-            try:
-                tip = gitrepo.references[name].peel(self._pygit2.Commit)
-            except (self._pygit2.GitError, self._pygit2.InvalidSpecError):
+        commits = self._ranged_commits(gitrepo, repo, ref) if ref else self._all_commits(gitrepo)
+        for commit in commits:
+            if str(commit.id) in seen_commits:
                 continue
-            for commit in gitrepo.walk(tip.id, self._pygit2.GIT_SORT_NONE):
-                if str(commit.id) in seen_commits:
-                    continue
-                seen_commits.add(str(commit.id))
-                self._walk_tree(gitrepo, commit.tree, "", paths, seen_trees)
+            seen_commits.add(str(commit.id))
+            self._walk_tree(gitrepo, commit.tree, "", paths, seen_trees)
         records = [
             BlobRecord(sha=sha, path=path, size_bytes=gitrepo[sha].size)
             for sha, path in paths.items()
         ]
         records.sort(key=lambda b: b.sha)
         return records
+
+    def _all_commits(self, gitrepo: Any) -> Iterator[Any]:
+        for name in gitrepo.references:
+            try:
+                tip = gitrepo.references[name].peel(self._pygit2.Commit)
+            except (self._pygit2.GitError, self._pygit2.InvalidSpecError):
+                continue
+            yield from gitrepo.walk(tip.id, self._pygit2.GIT_SORT_NONE)
+
+    def _ranged_commits(self, gitrepo: Any, repo: Path, ref: str) -> Any:
+        """`A..B` walks what `B` reaches minus what `A` does; a bare rev
+        walks only what it reaches, with nothing hidden."""
+        base_str, sep, tip_str = ref.partition("..")
+        if not sep:
+            base_str, tip_str = "", ref
+        try:
+            tip = gitrepo.revparse_single(tip_str or "HEAD").peel(self._pygit2.Commit)
+        except (KeyError, self._pygit2.GitError) as exc:
+            raise GitError(f"blobs failed (in {repo}): unknown ref {ref!r}") from exc
+        walker = gitrepo.walk(tip.id, self._pygit2.GIT_SORT_NONE)
+        if base_str:
+            try:
+                base = gitrepo.revparse_single(base_str).peel(self._pygit2.Commit)
+            except (KeyError, self._pygit2.GitError) as exc:
+                raise GitError(f"blobs failed (in {repo}): unknown ref {ref!r}") from exc
+            walker.hide(base.id)
+        return walker
 
     def _walk_tree(
         self,

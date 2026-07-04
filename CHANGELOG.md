@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Rites (`reaper perform`).** A rite is a named, ordered chain of steps
+  stored in the grimoire (`[[rites.<name>.steps]]` in `.reaperrc`), each step
+  a ritual plus its CLI args. `reaper perform <name> [sources...]` runs every
+  step against every source (a steps x sources matrix), capturing each
+  step's `--format json` output and folding it into one combined
+  `RiteResult` -- a failing step is recorded, not fatal, so the rest of the
+  rite still runs. The execution engine (`git_reaper.rite.perform_rite`) and
+  grimoire storage (`config.save_rite`/`find_rite`/`delete_rite`) are usable
+  as a library, independent of the CLI. The Coven chamber in the Sanctum TUI
+  composes rites visually, step by step, the same way the Grimoire composes
+  recipes.
+- **`exhume --since REF`.** Bound the secret scan to blobs reachable in
+  `REF..HEAD` instead of the full object graph, so a repeat caller (CI on
+  every push, a scheduled rescan, a hosted `commune` watcher) only re-reads
+  what's new since its last scan. `since_ref` is a pure input -- git-reaper
+  doesn't persist "last scanned" state itself, callers already know their
+  own ref. `ExhumeResult` gains a `scanned_since` provenance field; omitting
+  `--since` is the unchanged full-history scan. `GitBackend.blobs()` grew a
+  matching optional `ref` (a rev or an `A..B` range, mirroring `log`'s),
+  implemented natively for all three backends (subprocess, GitPython,
+  pygit2) with parity tests.
+- **Two new Agent Skills and two new examples, for controlling agents.**
+  `skills/reaper-commune` teaches an agent to stand up and connect to a
+  guarded `reaper commune` MCP server (root/host restriction, write and
+  network gates, shared resources and prompts) for itself or a fleet of
+  sub-agents. `skills/reaper-orchestrate` teaches the three ways to run
+  git-reaper repeatedly without re-typing an incantation — recipes
+  (`cast`), fleet manifests (`necropolis`), and rites (`perform`) — and when
+  to reach for each. `examples/commune-guarded.sh` proves a locked-down
+  commune server starts clean and prints the client connection line;
+  `examples/rite-perform.sh` composes a two-step rite and runs it across
+  one or more repos into one combined JSON report.
+
+## [0.9.2] - 2026-07-04
+
+### Added
+
+- **Scavenge calls out binary assets.** Each scavenged skill's report (and
+  the routing `SKILL.md` it writes) now names the non-text files it carried
+  along, not just a count, so a folder with reference docs and scripts no
+  longer looks identical to one that also drags in images or other binary
+  assets.
+- **Archive output for the directory-writing rituals.** `scavenge`,
+  `distill`, `leech`, and `necropolis` now accept `--format zip`, `tar`, or
+  `tar.gz` to package their output into a single deterministic archive
+  (sorted entries, zeroed ownership, same discipline as `embalm`) instead
+  of leaving loose files on disk. The packaging lives in the core
+  functions themselves (`scavenge()`, `distill.write_bundle()`,
+  `leech.write_blocks()`, `fleet.necropolis()`), so library callers get it
+  too, not just the CLI.
+
 ## [0.9.1] - 2026-07-03
 
 ### Added
@@ -548,7 +601,9 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/jmcmeen/git-reaper/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/jmcmeen/git-reaper/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/jmcmeen/git-reaper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jmcmeen/git-reaper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...v0.7.0

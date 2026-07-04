@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import gzip
+import io
 import os
 import re
 import shutil
 import stat
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 from typing import Any
 
 _CHUNK = 65536
 _SNIFF = 8192
+
+#: Archive containers a directory-tree output can be packaged into.
+ARCHIVE_FORMATS = ("zip", "tar", "tar.gz")
+_ARCHIVE_EXT = {"zip": ".zip", "tar": ".tar", "tar.gz": ".tar.gz"}
+_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)  # zip's date floor; there's no 1970 to pin to
 
 _SIZE_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([KMGT]?I?B?)\s*$", re.IGNORECASE)
 _SIZE_UNITS = {
@@ -97,3 +106,55 @@ def count_lines(path: Path) -> int:
 def estimate_tokens(byte_count: int) -> int:
     """Cheap chars/4 heuristic. tiktoken lands behind the [tokens] extra later."""
     return byte_count // 4
+
+
+def make_archive(source_dir: Path, fmt: str) -> Path:
+    """Package source_dir's files into a sibling archive, deterministically.
+
+    Entries are sorted and POSIX-named under a top-level source_dir.name/
+    prefix, with ownership/mtime stripped, so two runs over the same tree
+    produce byte-identical output (mirrors embalm's tarball discipline).
+    source_dir is left untouched; the caller decides whether to remove it.
+    """
+    if fmt not in ARCHIVE_FORMATS:
+        raise ValueError(f"unknown archive format {fmt!r}; use one of {ARCHIVE_FORMATS}")
+    dest = source_dir.with_name(source_dir.name + _ARCHIVE_EXT[fmt])
+    top = source_dir.name
+    paths = sorted(
+        (p for p in source_dir.rglob("*") if p.is_file() and not p.is_symlink()),
+        key=lambda p: p.relative_to(source_dir).as_posix(),
+    )
+
+    if fmt == "zip":
+        with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zf:
+            for path in paths:
+                arcname = f"{top}/{path.relative_to(source_dir).as_posix()}"
+                info = zipfile.ZipInfo(arcname, date_time=_ZIP_EPOCH)
+                info.external_attr = 0o644 << 16
+                zf.writestr(info, path.read_bytes())
+        return dest
+
+    with dest.open("wb") as raw:
+        if fmt == "tar.gz":
+            # mtime=0 pins the gzip header; the tarball stays byte-identical.
+            with (
+                gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as gz,
+                tarfile.open(fileobj=gz, mode="w") as tar,
+            ):
+                _write_tar_entries(tar, paths, source_dir, top)
+        else:
+            with tarfile.open(fileobj=raw, mode="w") as tar:
+                _write_tar_entries(tar, paths, source_dir, top)
+    return dest
+
+
+def _write_tar_entries(tar: tarfile.TarFile, paths: list[Path], source_dir: Path, top: str) -> None:
+    for path in paths:
+        data = path.read_bytes()
+        info = tarfile.TarInfo(f"{top}/{path.relative_to(source_dir).as_posix()}")
+        info.size = len(data)
+        info.mtime = 0
+        info.mode = 0o755 if path.stat().st_mode & 0o100 else 0o644
+        info.uid = info.gid = 0
+        info.uname = info.gname = ""
+        tar.addfile(info, io.BytesIO(data))

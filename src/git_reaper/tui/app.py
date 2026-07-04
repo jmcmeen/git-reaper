@@ -16,6 +16,7 @@ from textual.command import DiscoveryHit, Hit, Hits, Provider
 
 from git_reaper.tui.altar import AltarScreen
 from git_reaper.tui.console import ConsoleScreen
+from git_reaper.tui.coven import CovenScreen
 from git_reaper.tui.crypt import CryptMapScreen
 from git_reaper.tui.grimoire import GrimoireScreen
 from git_reaper.tui.necropolis import NecropolisScreen
@@ -27,6 +28,7 @@ from git_reaper.tui.widgets import REAPER_DRACULA
 CHAMBERS: tuple[tuple[str, str, str], ...] = (
     ("altar", "the altar", "run a ritual against one source"),
     ("grimoire", "the grimoire", "compose and inscribe recipes visually"),
+    ("coven", "the coven", "compose multi-step rites and run the chain"),
     ("console", "the incantation console", "assisted CLI with / commands"),
     ("necropolis", "the necropolis board", "the fleet, grave by grave"),
     ("reliquary", "the reliquary", "security and risk triage on one slab"),
@@ -68,6 +70,7 @@ class ReaperApp(App[None]):
         "crypt": CryptMapScreen,
         "altar": AltarScreen,
         "grimoire": GrimoireScreen,
+        "coven": CovenScreen,
         "console": ConsoleScreen,
         "necropolis": NecropolisScreen,
         "reliquary": ReliquaryScreen,
@@ -127,6 +130,20 @@ class ReaperApp(App[None]):
     #incantation { height: 2; color: $success; padding: 0 1; text-style: bold; }
     #grimoire-buttons { height: 3; margin: 0 1; }
     #grimoire-buttons Button { margin-right: 2; }
+
+    /* the coven */
+    #rite-list { width: 36; border-right: solid $primary; }
+    #steps-row { height: 14; }
+    #steps-panel { width: 30; border-right: solid $secondary; padding-right: 1; }
+    #steps { height: 1fr; }
+    #step-buttons { height: 3; }
+    #step-buttons Button { margin-right: 1; min-width: 6; }
+    #step-form { height: 1fr; padding-left: 1; }
+    #rite-incantation { height: 5; color: $success; padding: 0 1; }
+    #coven-buttons { height: 3; margin: 0 1; }
+    #coven-buttons Button { margin-right: 2; }
+    #results { height: 10; }
+    #results-preview { height: 8; border: round $primary; }
 
     /* the incantation console */
     #console-log { height: 1fr; border: round $primary; }

@@ -13,7 +13,7 @@ import pytest
 
 pytest.importorskip("pygit2")
 
-from git_reaper.gitio import SubprocessGit, default_backend
+from git_reaper.gitio import GitError, SubprocessGit, default_backend
 from git_reaper.gitio.pygit2_git import Pygit2Git
 
 
@@ -70,6 +70,27 @@ def test_show_file_and_blob_parity(necropolis, backends):
     sha = sub_blobs[0].sha
     assert sub.cat_blob(necropolis, sha) == pg.cat_blob(necropolis, sha)
     assert pg.cat_blob(necropolis, "0" * 40) is None
+
+
+def test_blobs_ranged_parity(necropolis, backends):
+    sub, pg = backends
+    for ref in ("v1.0.0..HEAD", "v1.0.0"):
+        sub_blobs = sub.blobs(necropolis, ref=ref)
+        pg_blobs = pg.blobs(necropolis, ref=ref)
+        assert {(b.sha, b.size_bytes) for b in sub_blobs} == {
+            (b.sha, b.size_bytes) for b in pg_blobs
+        }
+    # a range excludes blobs already reachable before it -- strictly fewer
+    # than the full walk, for a history with commits after the tag.
+    assert len(sub.blobs(necropolis, ref="v1.0.0..HEAD")) < len(sub.blobs(necropolis))
+
+
+def test_blobs_unknown_ref_is_a_git_error(necropolis, backends):
+    sub, pg = backends
+    with pytest.raises(GitError):
+        sub.blobs(necropolis, ref="no-such-ref..HEAD")
+    with pytest.raises(GitError):
+        pg.blobs(necropolis, ref="no-such-ref..HEAD")
 
 
 def test_not_a_repo_is_not_a_repo(make_dir, backends):

@@ -33,6 +33,7 @@ from git_reaper.models import (
     ProphecyResult,
     Provenance,
     RevenantResult,
+    RiteResult,
     RotResult,
     ScryResult,
     SoulsResult,
@@ -346,6 +347,7 @@ def render_exhume(result: ExhumeResult) -> str:
     out.append(
         f"\n{len(result.findings)} findings ({tally or 'none'}), "
         f"{result.blobs_scanned} blobs scanned, {result.suppressed} baselined"
+        + (f", new since {result.scanned_since}" if result.scanned_since else "")
     )
     if not result.findings:
         out.append("the dead kept their secrets.")
@@ -704,6 +706,23 @@ def render_exorcise(result: ExorciseResult) -> str:
     for warning in result.warnings:
         out.append(f"- {warning}")
     out.append("\nthe reaper plans; only you may swing. nothing above was executed.")
+    return "\n".join(out) + "\n"
+
+
+def render_rite(result: RiteResult) -> str:
+    """Per-step, per-source status; full payloads live in --format json."""
+    out = [f"# rite: {result.rite}", ""]
+    out.append("| source | step | command | status |")
+    out.append("| --- | --- | --- | --- |")
+    for outcome in result.outcomes:
+        status = "ok" if outcome.ok else f"failed: {_cell(outcome.error or 'unknown error')}"
+        out.append(
+            f"| {_cell(outcome.source)} | {_cell(outcome.step)} | {outcome.command} | {status} |"
+        )
+    ok_count = sum(1 for o in result.outcomes if o.ok)
+    out.append(
+        f"\n{ok_count}/{len(result.outcomes)} steps ok across {len(result.sources)} source(s)"
+    )
     return "\n".join(out) + "\n"
 
 
