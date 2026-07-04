@@ -12,6 +12,8 @@ only then.
 | [reaper-necromancy](reaper-necromancy/SKILL.md) | Mine history for who/when/why: `chronicle`, `souls`, `autopsy`, `lineage`, `possession`, `scry`, `graveyard`/`resurrect`, and friends. |
 | [reaper-audit](reaper-audit/SKILL.md) | Audit and gate: `exhume` for committed secrets, `omens` for risk, `plague` for dependency advisories, `veil` for redaction, `ward` for the one-command CI gate. |
 | [reaper-pack](reaper-pack/SKILL.md) | Pack repos for LLM context and back: `conjure` (sharding, hashes, veiling), `reanimate`, `harvest`, `leech`, `embalm`. |
+| [reaper-commune](reaper-commune/SKILL.md) | Give an agent (or a fleet of them) controlled access to a repo over MCP: `reaper commune`'s stdio/HTTP transports, the `--root`/`--host`/`--allow-write`/`--allow-network` guardrails, and its resources and prompts. |
+| [reaper-orchestrate](reaper-orchestrate/SKILL.md) | Control git-reaper across many repos or many rituals from one command: recipes (`cast`) for one saved incantation, fleet manifests (`necropolis`) to fan one ritual over many repos, and rites (`perform`) to chain several rituals into one named, combined-output workflow. |
 
 ## Installing
 
@@ -29,12 +31,14 @@ Other agent frameworks that support the SKILL.md convention can consume the
 folders unchanged. The skills assume `reaper` is on PATH
 (`pip install git-reaper` or `uv tool install git-reaper`).
 
-## Two other ways to hand git-reaper to an agent
+## One other way to hand git-reaper to an agent
 
-- **`reaper commune`** serves the rituals as MCP tools instead of teaching
-  the agent CLI incantations — see [docker/](../docker/README.md) for a
-  ready-made compose setup. Skills and MCP compose well: the skills explain
-  *which* ritual answers *which* question; commune removes the shell.
-- **`reaper distill`** goes the other direction: it generates a *new*,
-  repo-specific skill from any codebase (conventions, real build commands,
-  hotspots), rather than teaching the agent about git-reaper itself.
+**`reaper distill`** goes the other direction from every skill above: it
+generates a *new*, repo-specific skill from any codebase (conventions, real
+build commands, hotspots), rather than teaching the agent about git-reaper
+itself.
+
+(For MCP instead of CLI incantations, see the `reaper-commune` skill above —
+skills and MCP compose well: the skills explain *which* ritual answers
+*which* question; commune removes the shell. [docker/](../docker/README.md)
+has a ready-made compose setup.)

@@ -126,6 +126,30 @@ def test_exhume_digs_deleted_secrets_out_of_history(make_history):
     assert result.blobs_scanned > 0
 
 
+def test_exhume_since_ref_scans_only_new_blobs(make_history):
+    root = make_history(
+        [
+            {"message": "old secret", "write": {"a.txt": f"{AWS_KEY}\n"}, "tag": "v1"},
+            {"message": "new secret", "write": {"b.txt": f"{GITHUB_TOKEN}\n"}},
+        ]
+    )
+    repo = resolve_source(str(root)).repo
+    full = rules.exhume(repo)
+    assert {f.rule for f in full.findings} == {"aws-access-key", "github-token"}
+    assert full.scanned_since is None
+
+    incremental = rules.exhume(repo, since_ref="v1")
+    assert {f.rule for f in incremental.findings} == {"github-token"}
+    assert incremental.scanned_since == "v1"
+    assert incremental.blobs_scanned < full.blobs_scanned
+
+
+def test_exhume_since_ref_unknown_ref_is_a_git_error(make_repo):
+    repo = _repo(make_repo, {"a.txt": "hi\n"})
+    with pytest.raises(GitError):
+        rules.exhume(repo, since_ref="no-such-ref")
+
+
 def test_lockfiles_skip_the_entropy_sweep_but_not_signatures(make_repo):
     # a lock file is full of legitimate high-entropy hashes; the entropy sweep
     # must not cry wolf over it, but a real signature match still fires.

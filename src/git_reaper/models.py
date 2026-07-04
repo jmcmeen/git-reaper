@@ -6,7 +6,7 @@ Formatting is a separate layer (formatters/); the CLI and TUI only present.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 SourceKind = Literal["local", "remote"]
 
@@ -198,11 +198,69 @@ class Recipe:
 
 
 @dataclass
+class RiteStep:
+    """One step of a rite: a command and its CLI argument tokens.
+
+    The literal token ``{source}`` anywhere in `args` is replaced with the
+    source currently being processed; a step without it ignores the rite's
+    source loop and runs identically for every source.
+    """
+
+    command: str
+    args: list[str] = field(default_factory=list)
+    name: str = ""
+
+
+@dataclass
+class Rite:
+    """A named, ordered sequence of steps stored in the grimoire."""
+
+    name: str
+    steps: list[RiteStep] = field(default_factory=list)
+    description: str = ""
+    source: str = ""
+
+
+@dataclass
+class StepOutcome:
+    """One step's result against one source."""
+
+    step: str
+    command: str
+    source: str
+    ok: bool
+    output: Any = None
+    error: str | None = None
+
+
+@dataclass
+class RiteResult:
+    """A rite's combined outcome across every step and source."""
+
+    rite: str
+    sources: list[str] = field(default_factory=list)
+    outcomes: list[StepOutcome] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return all(outcome.ok for outcome in self.outcomes)
+
+    def combined(self) -> dict[str, dict[str, Any]]:
+        """Nest outcomes as ``{source: {step: output}}`` for export/display."""
+        by_source: dict[str, dict[str, Any]] = {source: {} for source in self.sources}
+        for outcome in self.outcomes:
+            payload = outcome.output if outcome.ok else {"error": outcome.error}
+            by_source.setdefault(outcome.source, {})[outcome.step] = payload
+        return by_source
+
+
+@dataclass
 class GrimoireResult:
-    """Effective configuration: values, origins, and stored recipes."""
+    """Effective configuration: values, origins, and stored recipes and rites."""
 
     settings: list[ConfigValue] = field(default_factory=list)
     recipes: list[Recipe] = field(default_factory=list)
+    rites: list[Rite] = field(default_factory=list)
     files: list[str] = field(default_factory=list)  # config files consulted
 
 
@@ -440,6 +498,7 @@ class ExhumeResult:
     findings: list[SecretFinding] = field(default_factory=list)
     blobs_scanned: int = 0
     suppressed: int = 0  # findings silenced by the baseline
+    scanned_since: str | None = None  # ref passed to --since; None means full history
 
 
 @dataclass

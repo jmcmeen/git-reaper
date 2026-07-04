@@ -150,6 +150,20 @@ def test_cursed_flag_on_a_leaky_repo(make_repo):
     assert not _run(tui_ops.OPERATIONS_BY_KEY["exhume"], clean).cursed
 
 
+def test_exhume_since_option_narrows_the_scan(make_history):
+    root = make_history(
+        [
+            {"message": "old secret", "write": {"a.txt": f"{AWS_KEY}\n"}, "tag": "v1"},
+            {"message": "new secret", "write": {"b.txt": "ghp_" + "a1B2" * 9 + "\n"}},
+        ]
+    )
+    exhume = tui_ops.OPERATIONS_BY_KEY["exhume"]
+    full = _run(exhume, root, format="json")
+    since = _run(exhume, root, since="v1", format="json")
+    assert "aws-access-key" in full.text and "github-token" in full.text
+    assert "aws-access-key" not in since.text and "github-token" in since.text
+
+
 def test_defaults_cover_every_option():
     for op in tui_ops.OPERATIONS:
         defaults = op.defaults()

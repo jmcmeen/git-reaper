@@ -50,7 +50,7 @@ FROZEN_FIELDS: dict[str, set[str]] = {
         "token_estimate",
     },
     "unfinished": {"provenance", "markers", "counts"},
-    "grimoire": {"settings", "recipes", "files"},
+    "grimoire": {"settings", "recipes", "rites", "files"},
     "pulse": {"checks"},
     "banish": {"removed", "kept", "reclaimed_bytes"},
     "chronicle": {"provenance", "commits", "changelog"},
@@ -88,7 +88,7 @@ FROZEN_FIELDS: dict[str, set[str]] = {
         "last_words",
         "witching_hour",
     },
-    "exhume": {"provenance", "findings", "blobs_scanned", "suppressed"},
+    "exhume": {"provenance", "findings", "blobs_scanned", "suppressed", "scanned_since"},
     "veil": {"provenance", "input", "replacements", "total"},
     "omens": {"provenance", "lens", "weights", "omens"},
     "doppelgangers": {"provenance", "clusters", "files_scanned", "reclaimable_bytes"},
@@ -149,6 +149,7 @@ FROZEN_FIELDS: dict[str, set[str]] = {
         "witching_hour",
         "slices",
     },
+    "perform": {"rite", "sources", "outcomes"},
 }
 
 

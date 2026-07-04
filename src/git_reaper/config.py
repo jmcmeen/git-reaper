@@ -21,7 +21,7 @@ else:
     import tomli as tomllib
 
 from git_reaper import cache
-from git_reaper.models import ConfigValue, GrimoireResult, Recipe
+from git_reaper.models import ConfigValue, GrimoireResult, Recipe, Rite, RiteStep
 
 CONFIG_FILE = ".reaperrc"
 
@@ -64,11 +64,50 @@ def _parse_recipes(table: Any, source: str) -> list[Recipe]:
     return recipes
 
 
+def _parse_rite_steps(items: Any, source: str, rite_name: str) -> list[RiteStep]:
+    if not isinstance(items, list):
+        raise GrimoireError(f"{source}: rite {rite_name!r} needs a list of 'steps'")
+    steps = []
+    for index, spec in enumerate(items):
+        if not isinstance(spec, dict) or not isinstance(spec.get("command"), str):
+            raise GrimoireError(
+                f"{source}: rite {rite_name!r} step {index} needs a string 'command'"
+            )
+        args = spec.get("args", [])
+        if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
+            raise GrimoireError(
+                f"{source}: rite {rite_name!r} step {index} 'args' must be a list of strings"
+            )
+        steps.append(
+            RiteStep(command=spec["command"], args=list(args), name=str(spec.get("name", "")))
+        )
+    return steps
+
+
+def _parse_rites(table: Any, source: str) -> list[Rite]:
+    if not isinstance(table, dict):
+        raise GrimoireError(f"{source}: 'rites' must be a table of rite tables")
+    rites = []
+    for name, spec in table.items():
+        if not isinstance(spec, dict):
+            raise GrimoireError(f"{source}: rite {name!r} must be a table")
+        steps = _parse_rite_steps(spec.get("steps", []), source, name)
+        if not steps:
+            raise GrimoireError(f"{source}: rite {name!r} needs at least one step")
+        rites.append(
+            Rite(
+                name=name, steps=steps, description=str(spec.get("description", "")), source=source
+            )
+        )
+    return rites
+
+
 def load_grimoire(root: Path | None = None) -> GrimoireResult:
     """Read every config source under root (default: cwd) and merge."""
     root = root or Path.cwd()
     result = GrimoireResult()
     recipes: dict[str, Recipe] = {}
+    rites: dict[str, Rite] = {}
 
     pyproject = root / "pyproject.toml"
     if pyproject.is_file():
@@ -77,6 +116,8 @@ def load_grimoire(root: Path | None = None) -> GrimoireResult:
             result.files.append(str(pyproject))
             for recipe in _parse_recipes(table.get("recipes", {}), "pyproject.toml"):
                 recipes[recipe.name] = recipe
+            for rite in _parse_rites(table.get("rites", {}), "pyproject.toml"):
+                rites[rite.name] = rite
 
     reaperrc = root / CONFIG_FILE
     if reaperrc.is_file():
@@ -84,6 +125,8 @@ def load_grimoire(root: Path | None = None) -> GrimoireResult:
         table = _load_toml(reaperrc)
         for recipe in _parse_recipes(table.get("recipes", {}), CONFIG_FILE):
             recipes[recipe.name] = recipe  # .reaperrc outranks pyproject
+        for rite in _parse_rites(table.get("rites", {}), CONFIG_FILE):
+            rites[rite.name] = rite  # .reaperrc outranks pyproject
 
     cache_env = os.environ.get("GIT_REAPER_CACHE")
     result.settings.append(
@@ -136,6 +179,7 @@ def load_grimoire(root: Path | None = None) -> GrimoireResult:
     )
 
     result.recipes = sorted(recipes.values(), key=lambda r: r.name)
+    result.rites = sorted(rites.values(), key=lambda r: r.name)
     return result
 
 
@@ -143,6 +187,13 @@ def find_recipe(name: str, root: Path | None = None) -> Recipe | None:
     for recipe in load_grimoire(root).recipes:
         if recipe.name == name:
             return recipe
+    return None
+
+
+def find_rite(name: str, root: Path | None = None) -> Rite | None:
+    for rite in load_grimoire(root).rites:
+        if rite.name == name:
+            return rite
     return None
 
 
@@ -374,4 +425,96 @@ def delete_recipe(name: str, root: Path | None = None) -> Path:
         raise GrimoireError(f"recipe {name!r} is inscribed in {recipe.source}; edit it there")
     text = path.read_text(encoding="utf-8")
     path.write_text(_strip_recipe_section(text, name), encoding="utf-8")
+    return path
+
+
+# --------------------------------------------------------------------------
+# writing rites -- the Coven chamber's save/delete, mirroring recipes above
+# --------------------------------------------------------------------------
+
+
+def _rite_section(rite: Rite) -> str:
+    """The `[rites.<name>]` table plus its `[[rites.<name>.steps]]` entries,
+    ready to append."""
+    key = _toml_key(rite.name)
+    chunks = [f"[rites.{key}]"]
+    if rite.description:
+        chunks[0] += f"\ndescription = {_toml_string(rite.description)}"
+    for step in rite.steps:
+        lines = [f"[[rites.{key}.steps]]", f"command = {_toml_string(step.command)}"]
+        if step.args:
+            lines.append(f"args = [{', '.join(_toml_string(a) for a in step.args)}]")
+        if step.name:
+            lines.append(f"name = {_toml_string(step.name)}")
+        chunks.append("\n".join(lines))
+    return "\n\n".join(chunks) + "\n"
+
+
+def _strip_rite_section(text: str, name: str) -> str:
+    """Remove one rite: its `[rites.<name>]` table and every
+    `[[rites.<name>.steps]]` entry, leaving everything else untouched.
+
+    Unlike a recipe's single table, a rite's tables need not be contiguous,
+    so each header line is re-checked on its own rather than skipping until
+    the next header of any kind.
+    """
+    escaped = re.escape(name)
+    quoted = re.escape(_toml_string(name))
+    main_header = re.compile(rf"^\[rites\.({escaped}|{quoted})\]\s*$")
+    step_header = re.compile(rf"^\[\[rites\.({escaped}|{quoted})\.steps\]\]\s*$")
+    any_header = re.compile(r"^\s*\[")
+    out: list[str] = []
+    skipping = False
+    for line in text.splitlines(keepends=True):
+        if any_header.match(line):
+            stripped = line.strip()
+            skipping = bool(main_header.match(stripped) or step_header.match(stripped))
+        if not skipping:
+            out.append(line)
+    return "".join(out)
+
+
+def save_rite(rite: Rite, root: Path | None = None) -> Path:
+    """Inscribe (or re-inscribe) a rite in .reaperrc; returns the file written.
+
+    Only .reaperrc is ever written -- rites living in pyproject.toml are
+    edited there by hand. Because .reaperrc outranks pyproject, saving here
+    also overrides a same-named pyproject rite.
+    """
+    if not rite.name.strip():
+        raise GrimoireError("a rite needs a name")
+    if not rite.steps:
+        raise GrimoireError(f"rite {rite.name!r} needs at least one step")
+    for step in rite.steps:
+        if not step.command.strip():
+            raise GrimoireError(f"rite {rite.name!r} has a step with no command")
+    root = root or Path.cwd()
+    path = root / CONFIG_FILE
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    if text:
+        _load_toml(path)  # refuse to edit a miswritten grimoire
+        text = _strip_rite_section(text, rite.name)
+        if text and not text.endswith("\n"):
+            text += "\n"
+        if text:
+            text += "\n"
+    path.write_text(text + _rite_section(rite), encoding="utf-8")
+    return path
+
+
+def delete_rite(name: str, root: Path | None = None) -> Path:
+    """Strike a rite from .reaperrc; returns the file written.
+
+    A rite inscribed in pyproject.toml cannot be deleted here -- the error
+    says where to edit instead of silently doing nothing.
+    """
+    root = root or Path.cwd()
+    path = root / CONFIG_FILE
+    rite = find_rite(name, root)
+    if rite is None:
+        raise GrimoireError(f"no rite named {name!r}")
+    if rite.source != CONFIG_FILE:
+        raise GrimoireError(f"rite {name!r} is inscribed in {rite.source}; edit it there")
+    text = path.read_text(encoding="utf-8")
+    path.write_text(_strip_rite_section(text, name), encoding="utf-8")
     return path

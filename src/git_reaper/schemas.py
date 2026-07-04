@@ -122,6 +122,7 @@ COMMAND_MODELS: dict[str, type] = {
     "prophecy": models.ProphecyResult,
     "exorcise": models.ExorciseResult,
     "effigy": models.EffigyResult,
+    "perform": models.RiteResult,
 }
 
 #: Commands with no JSON output of their own (`cast` emits whatever the

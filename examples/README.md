@@ -13,6 +13,8 @@ remote URL** as the source.
 | [ci-gate.sh](ci-gate.sh) | The one-line repo-health gate: `reaper ward` runs the whole `[ward]` policy and exits 3 when any check breaks. |
 | [fleet.sh](fleet.sh) | Fleet reaping: write a `necropolis.toml` manifest and fan a ritual across every grave, one artifact per repo plus a combined index. |
 | [skill-harvest.sh](skill-harvest.sh) | Skill scraping from primitives: find every Agent Skill folder (`limbs --format json`), pack the repo (`conjure --sha256`), raise it elsewhere (`reanimate --verify`), and lift each skill into a reusable library with an `INDEX.md`. (`reaper scavenge` now does this in one command; the script shows the composition.) |
+| [rite-perform.sh](rite-perform.sh) | Compose a rite (a named, multi-step ritual chain) and run it across one or more repos in one command: `reaper perform` folds every step's output into one combined JSON report — the orchestration primitive for an agent that needs one call, not a hand-rolled loop of separate invocations. |
+| [commune-guarded.sh](commune-guarded.sh) | Stand up a locked-down `reaper commune` MCP server (root-restricted, read-only, offline) for handing agents controlled access to a repo, confirm it starts clean, and print the client connection line. |
 
 ## Running them
 
@@ -25,6 +27,8 @@ cd examples
 ./ci-gate.sh .
 ./fleet.sh fleet-report . ../some-other-repo
 ./skill-harvest.sh skill-crypt .. https://github.com/anthropics/skills
+./rite-perform.sh sweep-report.json . ../some-other-repo
+./commune-guarded.sh . 6666                     # needs pip install "git-reaper[mcp]"
 ```
 
 All scripts need `reaper` on PATH (`pip install git-reaper` or

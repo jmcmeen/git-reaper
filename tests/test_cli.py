@@ -319,6 +319,22 @@ def test_exhume_baseline_flow(make_repo, tmp_path):
     assert gated.exit_code == 0  # every finding is baselined
 
 
+def test_exhume_since_flag_scans_only_new_blobs(make_history):
+    root = make_history(
+        [
+            {"message": "old secret", "write": {"a.txt": f"{AWS_KEY}\n"}, "tag": "v1"},
+            {"message": "new secret", "write": {"b.txt": "ghp_" + "a1B2" * 9 + "\n"}},
+        ]
+    )
+    result = runner.invoke(
+        app, ["--plain", "exhume", str(root), "--since", "v1", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data["scanned_since"] == "v1"
+    assert {f["rule"] for f in data["findings"]} == {"github-token"}
+
+
 def test_veil_reads_stdin_writes_stdout():
     result = runner.invoke(app, ["--plain", "veil", "-"], input=f"key={AWS_KEY}\n")
     assert result.exit_code == 0

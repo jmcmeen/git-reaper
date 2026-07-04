@@ -235,6 +235,7 @@ def exhume(
     rules: list[Rule] | None = None,
     with_entropy: bool = True,
     baseline: set[str] | None = None,
+    since_ref: str | None = None,
     invoked: str = "reaper exhume",
     generated: str | None = None,
     backend: GitBackend | None = None,
@@ -242,7 +243,10 @@ def exhume(
     """Scan every reachable blob in history for secrets.
 
     Each unique blob is read once; findings are attributed to the oldest
-    commit that introduced the blob at its recorded path.
+    commit that introduced the blob at its recorded path. `since_ref` bounds
+    the walk to blobs reachable in `since_ref..HEAD` -- new blobs only --
+    instead of the full object graph; a blob already scanned in a prior run
+    (anything reachable from `since_ref`) is never read again.
     """
     backend = backend or default_backend()
     root = Path(repo.path)
@@ -250,11 +254,13 @@ def exhume(
         raise GitError(f"not a git repository: {repo.source} (exhume digs through history)")
     rules = [r for r in (rules if rules is not None else list(BUILTIN_RULES)) if not r.veil_only]
     baseline = baseline or set()
+    walk_ref = f"{since_ref}..HEAD" if since_ref else None
 
     result = ExhumeResult(
-        provenance=make_provenance(artifact_schema("exhume"), repo, invoked, generated)
+        provenance=make_provenance(artifact_schema("exhume"), repo, invoked, generated),
+        scanned_since=since_ref,
     )
-    for blob in backend.blobs(root):
+    for blob in backend.blobs(root, ref=walk_ref):
         if blob.size_bytes > MAX_SCAN_BYTES:
             continue
         raw = backend.cat_blob(root, blob.sha)

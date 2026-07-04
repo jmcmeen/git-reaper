@@ -21,6 +21,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from git_reaper import __version__, art, cache, config, fsutil, schemas
+from git_reaper import rite as rite_core
 from git_reaper.core import banshee as banshee_core
 from git_reaper.core import census as census_core
 from git_reaper.core import dedupe as dedupe_core
@@ -54,7 +55,7 @@ from git_reaper.core import ward as ward_core
 from git_reaper.core.source import ResolvedSource, resolve_source
 from git_reaper.formatters import csvfmt, htmlfmt, jsonfmt, markdown, svgfmt
 from git_reaper.gitio import GitError
-from git_reaper.models import Recipe, RepoRef
+from git_reaper.models import Recipe, RepoRef, Rite
 from git_reaper.theme import make_console, theme_enabled
 
 
@@ -588,6 +589,51 @@ def cast_cmd(
         raise typer.Exit(code=code)
 
 
+def _find_rite(name: str) -> Rite:
+    """A named rite, or a themed death."""
+    try:
+        found = config.find_rite(name)
+    except config.GrimoireError as exc:
+        raise _die(str(exc)) from exc
+    if found is None:
+        raise _die(f"no rite named {name!r}", "`reaper grimoire` lists what is inscribed")
+    return found
+
+
+@app.command("perform")
+def perform_cmd(
+    name: str | None = typer.Argument(None, help="Rite name from the grimoire."),
+    sources: list[str] = typer.Argument(
+        None, help="Sources to run the rite against (default: '.')."
+    ),
+    fmt: str = typer.Option("md", "--format", "-f", help="md or json."),
+    out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
+    schema: bool = typer.Option(False, "--schema", help="Print the JSON schema and exit."),
+) -> None:
+    """Run a saved rite: its steps, in order, against one or more sources."""
+    if schema:
+        _print_schema("perform")
+        return
+    if name is None:
+        raise _die("no rite given", "`reaper grimoire` lists what is inscribed")
+    _validate_format(fmt)
+    _banner()
+    a_rite = _find_rite(name)
+    try:
+        result = rite_core.perform_rite(a_rite, sources or None, plain=state.plain)
+    except rite_core.RiteError as exc:
+        raise _die(str(exc)) from exc
+    ok_count = sum(1 for o in result.outcomes if o.ok)
+    style = "necro" if result.ok else "blood"
+    _say(style, f"performed {name!r}: {ok_count}/{len(result.outcomes)} steps ok")
+    if fmt == "json":
+        _emit(jsonfmt.render(result), out)
+    else:
+        _emit(markdown.render_rite(result), out)
+    if not result.ok:
+        raise typer.Exit(code=1)
+
+
 # --------------------------------------------------------------------------
 # git necromancy: chronicle, souls, haunt, autopsy, graveyard, resurrect,
 # ghosts, rot, tombstone. History needs a full clone, so remote sources are
@@ -907,6 +953,9 @@ def exhume_cmd(
     no_entropy: bool = typer.Option(
         False, "--no-entropy", help="Signatures only; skip the entropy sweep."
     ),
+    since: str | None = typer.Option(
+        None, "--since", help="Only blobs new since this ref (incremental rescan)."
+    ),
     fmt: str = typer.Option("md", "--format", "-f", help="md, json, csv, or html."),
     out: Path | None = typer.Option(None, "--out", "-o", help="Output file (default stdout)."),
     ref: str | None = typer.Option(None, "--ref", help="Branch, tag, or sha."),
@@ -934,6 +983,7 @@ def exhume_cmd(
             rules=rules,
             with_entropy=not no_entropy,
             baseline=known,
+            since_ref=since,
             invoked=_invocation(),
         )
     except GitError as exc:
@@ -945,7 +995,8 @@ def exhume_cmd(
     _say(
         "necro",
         f"scanned {result.blobs_scanned} blobs: {len(result.findings)} findings"
-        + (f", {result.suppressed} baselined" if result.suppressed else ""),
+        + (f", {result.suppressed} baselined" if result.suppressed else "")
+        + (f" (new since {since})" if since else ""),
     )
     if fmt == "json":
         _emit(jsonfmt.render(result), out)

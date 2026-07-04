@@ -172,11 +172,12 @@ class GitPythonGit(GitBackend):
 
     # -- object mining (Phase 5) ---------------------------------------------
 
-    def blobs(self, repo: Path) -> list[BlobRecord]:
-        return logparse.parse_blobs(
-            self._exec(repo, logparse.object_list_args()),
-            self._exec(repo, logparse.batch_check_args()),
-        )
+    def blobs(self, repo: Path, ref: str | None = None) -> list[BlobRecord]:
+        try:
+            objects = self._exec(repo, logparse.object_list_args(ref))
+        except self._git.GitCommandError as exc:
+            raise GitError(f"git rev-list failed (in {repo}): {exc}") from exc
+        return logparse.parse_blobs(objects, self._exec(repo, logparse.batch_check_args()))
 
     def cat_blob(self, repo: Path, sha: str) -> bytes | None:
         try:

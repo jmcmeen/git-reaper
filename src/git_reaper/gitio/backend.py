@@ -175,9 +175,13 @@ class GitBackend(ABC):
     # -- object mining (Phase 5: exhume, bloat) -----------------------------
 
     @abstractmethod
-    def blobs(self, repo: Path) -> list[BlobRecord]:
+    def blobs(self, repo: Path, ref: str | None = None) -> list[BlobRecord]:
         """Every unique blob reachable from any ref, with one example path
-        and its uncompressed size, sorted by sha for determinism."""
+        and its uncompressed size, sorted by sha for determinism.
+
+        `ref` narrows the walk the same way `log`'s does: a single rev walks
+        only what it reaches, an `A..B` range walks what `B` reaches minus
+        what `A` already did (new blobs since `A`). `None` is every ref."""
 
     @abstractmethod
     def cat_blob(self, repo: Path, sha: str) -> bytes | None:

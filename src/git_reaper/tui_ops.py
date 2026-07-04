@@ -362,8 +362,13 @@ def _bloat(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
 
 def _exhume(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     rules = rules_core.load_rules(config.custom_rules())
+    since = str(opts.get("since") or "").strip() or None
     result = rules_core.exhume(
-        repo, rules=rules, with_entropy=not opts["no_entropy"], invoked=_invoked("exhume")
+        repo,
+        rules=rules,
+        with_entropy=not opts["no_entropy"],
+        since_ref=since,
+        invoked=_invoked("exhume"),
     )
     text = _dispatch("exhume", result, opts["format"], markdown.render_exhume)
     summary = f"{len(result.findings)} findings, {result.blobs_scanned} blobs scanned"
@@ -621,7 +626,11 @@ OPERATIONS: list[Operation] = [
         "dark arts",
         True,
         _exhume,
-        (ToggleOpt("no_entropy", "no entropy (signatures only)"), _format_opt(*_ALL_FORMATS)),
+        (
+            ToggleOpt("no_entropy", "no entropy (signatures only)"),
+            TextOpt("since", "since (ref: only blobs new since it)"),
+            _format_opt(*_ALL_FORMATS),
+        ),
     ),
     Operation(
         "veil",

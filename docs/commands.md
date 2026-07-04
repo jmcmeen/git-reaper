@@ -112,6 +112,40 @@ reaper cast nightly-pack
 reaper cast nightly-pack --split-tokens 50000   # override at cast time
 ```
 
+## perform
+
+Run a saved rite: a named, ordered chain of steps from the grimoire, each
+step a command plus its CLI argument tokens -- run in order against one or
+more sources. The literal token `{source}` in a step's args is replaced with
+the source currently being processed; a step without it runs identically for
+every source. Each step is captured as JSON and folded into one combined
+result, so a step's command must support `--format json` and `--out` (most
+analysis rituals do; writers like `harvest`/`conjure`/`veil` and multi-arg
+commands like `scry` do not qualify). A step that fails is recorded, not
+fatal -- the rest of the rite still runs; check the exit code (nonzero if
+any step failed) or read each outcome's `ok`/`error` in `--format json`.
+
+```toml
+# .reaperrc
+[rites.audit]
+description = "history plus a size check"
+
+[[rites.audit.steps]]
+command = "chronicle"
+args = ["{source}", "--changelog"]
+
+[[rites.audit.steps]]
+command = "census"
+name = "loc"
+args = ["{source}"]
+```
+
+```sh
+reaper perform audit .                          # one source, markdown status table
+reaper perform audit . other-repo/               # the matrix: 2 steps x 2 sources
+reaper perform audit . --format json | jq .outcomes  # every step's full payload
+```
+
 ## Necromancy
 
 Mining commit history: who, what, when, and what has died. These rituals
@@ -233,11 +267,21 @@ the commit, path, rule, and a masked preview. `--baseline FILE` suppresses
 known findings (a JSON list of fingerprints, or a previous `--format json`
 report). `--fail-on {any,high}` gates CI with exit 3.
 
+`--since REF` bounds the walk to blobs reachable in `REF..HEAD` -- new blobs
+only -- instead of the full object graph. A one-shot local scan doesn't need
+it, but a caller that rescans the same repo repeatedly (CI on every push, a
+scheduled rescan, a hosted watcher over `commune`) can pass the ref it last
+scanned from and skip re-reading everything before it. The report's
+`scanned_since` field records what was passed, so a JSON report is
+self-describing about its scope; omit `--since` for the full-history scan,
+unchanged.
+
 ```sh
 reaper exhume .                              # report, exit 0
 reaper exhume . --fail-on any                # one-line CI gate (exit 3)
 reaper exhume . --baseline known.json --fail-on high
 reaper exhume . --no-entropy --format html -o secrets.html
+reaper exhume . --since v1.2.0               # only blobs new since that tag
 ```
 
 ### veil

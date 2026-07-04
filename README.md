@@ -44,10 +44,11 @@ fallback if the REAPER DAW already owns the short one).
 | `embalm` | Preserve a repo state in a deterministic, provenance-stamped `.tar.gz`: sorted entries, zeroed ownership, every timestamp pinned to the HEAD commit (byte-identical across runs), with a `PROVENANCE` block and a `MANIFEST.sha256` at the archive root. The receipt prints the archive's own sha256, so the snapshot is citable. |
 | `grimoire` | Show effective configuration, where each value came from, and stored recipes. |
 | `cast` | Run a saved recipe from the grimoire instead of retyping nine flags. |
+| `perform` | Run a saved rite: a named, ordered chain of rituals from the grimoire (`[[rites.<name>.steps]]` in `.reaperrc`), against one or more sources. Each step's args may use the token `{source}` to receive the source currently being processed; steps are captured as JSON and combined into one result (`--format json` for the full per-step, per-source payload). A failing step is recorded, not fatal — the rest of the rite still runs. |
 | `banshee` | Watch mode: poll a directory (ignore rules honored) and scream — re-run a recipe from the grimoire — whenever it changes. `--interval` tunes the poll, `--once` stops after the first scream. Portable polling, no extra dependencies. |
 | `pulse` | Signs-of-life check: git present, optional extras, cache health. |
 | `banish` | Clear the catacombs (the clone cache). `--older-than 7d` for partial exorcisms. |
-| `summon` | Launch the Sanctum, the interactive Textual TUI (needs the `[tui]` extra): a Dracula-themed workbench of chambers reached from a home crypt map. The Altar runs any analysis ritual (options, preview, save, cursed badge); the Grimoire composes recipes visually and inscribes them in `.reaperrc` for `cast`; the Incantation console is an assisted CLI with `/` commands, fuzzy menus, live flag validation, and history; the Necropolis board reaps a whole `necropolis.toml` fleet with per-grave fates; the Reliquary triages `exhume`/`omens`/`plague`/`rot` on one severity-sorted slab; the Séance table pairs the souls heatmap with an hour-by-hour commit explorer and a two-ref scry. Number keys jump chambers, escape returns home, Ctrl+P's palette knows every door and theme. Nothing is TUI-trapped: recipes cast headless and every console line is a real `reaper` invocation. |
+| `summon` | Launch the Sanctum, the interactive Textual TUI (needs the `[tui]` extra): a Dracula-themed workbench of chambers reached from a home crypt map. The Altar runs any analysis ritual (options, preview, save, cursed badge); the Grimoire composes recipes visually and inscribes them in `.reaperrc` for `cast`; the Coven composes rites — multi-step chains of rituals — the same way, for `perform`; the Incantation console is an assisted CLI with `/` commands, fuzzy menus, live flag validation, and history; the Necropolis board reaps a whole `necropolis.toml` fleet with per-grave fates; the Reliquary triages `exhume`/`omens`/`plague`/`rot` on one severity-sorted slab; the Séance table pairs the souls heatmap with an hour-by-hour commit explorer and a two-ref scry. Number keys jump chambers, escape returns home, Ctrl+P's palette knows every door and theme. Nothing is TUI-trapped: recipes cast headless, rites perform headless, and every console line is a real `reaper` invocation. |
 | `commune` | Serve the read-only rituals to agents as an MCP server (needs the `[mcp]` extra): every analysis ritual becomes an agent-callable tool returning the same provenance-stamped JSON, over stdio (default) or `--http HOST:PORT`. Rooted to the launch source unless `--root`/`--host` widen the circle; the writing rituals (`resurrect`, `reanimate`, `banish`, `scavenge`) appear only with `--allow-write`, `veil` scrubs text in flight, and `plague` stays offline without `--allow-network`. Publishes the grimoire, tombstone, and census as MCP resources plus ready-made audit/pack/explain prompts. |
 
 ### Git necromancy (history mining)
@@ -76,7 +77,7 @@ History commands need real history, so remote sources are cloned full-depth
 
 | Command | What it does |
 | --- | --- |
-| `exhume` | Scan the full history for committed secrets (API keys, tokens, private keys) via regex signatures plus entropy. Reports commit, path, rule, and a masked preview, never the full secret. `--baseline` suppresses known findings; `--fail-on {any,high}` gates CI. |
+| `exhume` | Scan the full history for committed secrets (API keys, tokens, private keys) via regex signatures plus entropy. Reports commit, path, rule, and a masked preview, never the full secret. `--baseline` suppresses known findings; `--fail-on {any,high}` gates CI. `--since <ref>` bounds the walk to blobs new since that ref (a tag from the last scan, say) instead of the full object graph — the same findings, at a fraction of the cost for repeat scans (CI on every push, a scheduled rescan). |
 | `veil` | Scrub secrets and configured patterns from any artifact (or stdin) before it leaves the crypt, replacing each match with `[VEILED:rule-name]`. Shares one rules engine with `exhume`; also inline as `conjure --veil`. |
 | `omens` | Composite per-file risk prophecy: a weighted blend of churn, bug-fix density, recency, and size. `--lens {churn,bugs,age,all}`, weights configurable in the grimoire. Hints, not fate. |
 | `doppelgangers` | Find duplicate files by content hash. Reports clusters and reclaimable space. |
@@ -112,6 +113,7 @@ reaper scavenge https://github.com/anthropics/skills -o crypt/  # steal skills a
 reaper scavenge . --format zip                            # crypt.zip instead of a loose dir
 reaper unfinished . --age
 reaper cast nightly-pack
+reaper perform audit . other-repo/            # a saved rite's steps, combined, per source
 reaper limbs . --format json | jq .file_count
 reaper banish --older-than 7d
 
@@ -216,16 +218,20 @@ Three ready-made ways in, each in its own folder:
   `docker compose run --rm reaper tombstone /repos/some-repo`.
 - **[skills/](skills/)** — portable Agent Skills that teach a coding agent
   the rituals: `reaper-orient` (map an unfamiliar repo), `reaper-necromancy`
-  (history mining), `reaper-audit` (secrets, risk, gating), and
-  `reaper-pack` (LLM context packing). Copy a folder into your agent's
-  skills directory (for Claude Code, `.claude/skills/`) and it triggers on
-  the matching questions. Not to be confused with `reaper distill`, which
-  *generates* a repo-specific skill from any codebase.
+  (history mining), `reaper-audit` (secrets, risk, gating), `reaper-pack`
+  (LLM context packing), `reaper-commune` (controlled MCP access for a
+  fleet of agents), and `reaper-orchestrate` (recipes, fleet manifests, and
+  rites — one command over many repos or many rituals). Copy a folder into
+  your agent's skills directory (for Claude Code, `.claude/skills/`) and it
+  triggers on the matching questions. Not to be confused with `reaper
+  distill`, which *generates* a repo-specific skill from any codebase.
 - **[examples/](examples/)** — scripted end-to-end workflows in plain bash:
   `orientation.sh` (first contact with a repo), `audit.sh` (the full sweep,
   CI-ready exit codes), `pack-roundtrip.sh` (conjure, reanimate `--verify`,
-  byte-compare), `ci-gate.sh` (one-line `ward` gate), and `fleet.sh`
-  (necropolis fan-out). Each takes a path or remote URL.
+  byte-compare), `ci-gate.sh` (one-line `ward` gate), `fleet.sh` (necropolis
+  fan-out), `rite-perform.sh` (compose and run a multi-step rite across
+  repos), and `commune-guarded.sh` (stand up a locked-down MCP server). Each
+  takes a path or remote URL.
 
 ## ⛓️ Behavior you can rely on
 

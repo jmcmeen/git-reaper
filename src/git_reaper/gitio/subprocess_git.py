@@ -197,9 +197,9 @@ class SubprocessGit(GitBackend):
 
     # -- object mining (Phase 5) ---------------------------------------------
 
-    def blobs(self, repo: Path) -> list[BlobRecord]:
+    def blobs(self, repo: Path, ref: str | None = None) -> list[BlobRecord]:
         return logparse.parse_blobs(
-            self._run(logparse.object_list_args(), cwd=repo),
+            self._run(logparse.object_list_args(ref), cwd=repo),
             self._run(logparse.batch_check_args(), cwd=repo),
         )
 

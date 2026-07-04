@@ -70,6 +70,13 @@ def test_blob_mining_parity(necropolis, backends):
     )
 
 
+def test_blob_mining_ranged_parity(necropolis, backends):
+    sub, gp = backends
+    for ref in ("v1.0.0..HEAD", "v1.0.0"):
+        assert sub.blobs(necropolis, ref=ref) == gp.blobs(necropolis, ref=ref)
+    assert len(sub.blobs(necropolis, ref="v1.0.0..HEAD")) < len(sub.blobs(necropolis))
+
+
 def test_full_command_parity_via_core(necropolis, backends):
     # The public commands must agree end-to-end, not just the raw backend.
     sub, gp = backends
