@@ -10,8 +10,8 @@ VENV ?= .venv
 help: ## List the available rituals
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[35m%-12s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Create the venv and install all deps (incl. dev group)
-	$(UV) sync
+setup: ## Create the venv and install all deps (incl. dev group and extras)
+	$(UV) sync --all-extras
 
 fmt: ## Auto-format and fix lint findings
 	$(UV) run ruff format src tests
