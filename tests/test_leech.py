@@ -92,6 +92,26 @@ def test_write_blocks_wants_an_empty_plot(tmp_path):
     assert (out / "a.py").read_text(encoding="utf-8") == "x\n"
 
 
+def test_write_blocks_archives_and_returns_the_archive_path(tmp_path):
+    out = tmp_path / "risen"
+    written = leech_core.write_blocks({"a.py": "x\n"}, out, archive="tar")
+    assert not out.exists()
+    assert written == out.with_name("risen.tar")
+    assert written.is_file()
+
+
+def test_leech_cli_zip_format(tmp_path):
+    doc = tmp_path / "guide.md"
+    doc.write_text(DOC, encoding="utf-8")
+    out = tmp_path / "drained"
+    result = runner.invoke(
+        app, ["--plain", "leech", str(doc), "--out", str(out), "--format", "zip"]
+    )
+    assert result.exit_code == 0, result.output
+    assert not out.exists()
+    assert (tmp_path / "drained.zip").is_file()
+
+
 def test_leech_cli_round_trip(tmp_path, monkeypatch):
     doc = tmp_path / "guide.md"
     doc.write_text(DOC, encoding="utf-8")

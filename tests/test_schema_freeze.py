@@ -106,7 +106,7 @@ FROZEN_FIELDS: dict[str, set[str]] = {
         "new_souls",
     },
     "plague": {"provenance", "dependencies", "afflictions", "checked", "unpinned"},
-    "necropolis": {"command", "graves", "index"},
+    "necropolis": {"command", "graves", "index", "archive"},
     "distill": {
         "provenance",
         "name",

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-07-04
+
+### Added
+
+- **Scavenge calls out binary assets.** Each scavenged skill's report (and
+  the routing `SKILL.md` it writes) now names the non-text files it carried
+  along, not just a count, so a folder with reference docs and scripts no
+  longer looks identical to one that also drags in images or other binary
+  assets.
+- **Archive output for the directory-writing rituals.** `scavenge`,
+  `distill`, `leech`, and `necropolis` now accept `--format zip`, `tar`, or
+  `tar.gz` to package their output into a single deterministic archive
+  (sorted entries, zeroed ownership, same discipline as `embalm`) instead
+  of leaving loose files on disk. The packaging lives in the core
+  functions themselves (`scavenge()`, `distill.write_bundle()`,
+  `leech.write_blocks()`, `fleet.necropolis()`), so library callers get it
+  too, not just the CLI.
+
 ## [0.9.1] - 2026-07-03
 
 ### Added
@@ -548,7 +566,9 @@ library-first core.
 - Test suite covering the CLI, harvest, tree, ignore matching, cache, and
   schema export; CI workflow; mkdocs documentation site; Makefile.
 
-[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/jmcmeen/git-reaper/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/jmcmeen/git-reaper/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/jmcmeen/git-reaper/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/jmcmeen/git-reaper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/jmcmeen/git-reaper/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/jmcmeen/git-reaper/compare/v0.6.0...v0.7.0

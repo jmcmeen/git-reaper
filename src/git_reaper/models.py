@@ -670,6 +670,7 @@ class ScavengedSkill:
     path: str  # original folder, relative to the source root ("." for the root)
     description: str = ""  # its own frontmatter description line
     files: int = 0
+    binary: list[str] = field(default_factory=list)  # POSIX paths, relative to the skill root
 
 
 @dataclass
@@ -700,6 +701,7 @@ class NecropolisResult:
     command: str
     graves: list[GraveOutcome] = field(default_factory=list)
     index: str = ""  # path of the combined index artifact
+    archive: str = ""  # set instead of a loose out_dir when --format packages one
 
 
 @dataclass

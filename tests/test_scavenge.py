@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import zipfile
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from git_reaper import tui_ops
+from git_reaper import fsutil, tui_ops
 from git_reaper.cli import app
 from git_reaper.core import fleet
 from git_reaper.core import scavenge as scavenge_core
@@ -31,10 +32,10 @@ SKILLED = {
 }
 
 
-def _scavenge(root: Path, out: Path, excludes: list[str] | None = None):
+def _scavenge(root: Path, out: Path, excludes: list[str] | None = None, archive: str | None = None):
     resolved = resolve_source(str(root))
     return scavenge_core.scavenge(
-        resolved.repo, out, excludes=excludes, generated="2026-01-01T00:00:00Z"
+        resolved.repo, out, excludes=excludes, generated="2026-01-01T00:00:00Z", archive=archive
     )
 
 
@@ -54,6 +55,10 @@ def test_scavenge_lifts_skill_folders_whole(make_repo, tmp_path):
     assert alpha.files == 3
     # The description came from the skill's own frontmatter, pipes escaped.
     assert alpha.description == "Teaches alpha \\| with a pipe."
+    # Binary assets are called out by name; text files are not.
+    assert alpha.binary == ["assets/icon.png"]
+    beta = next(s for s in result.skills if s.name == "beta")
+    assert beta.binary == []
 
 
 def test_routing_index_lists_the_loot(make_repo, tmp_path):
@@ -67,6 +72,18 @@ def test_routing_index_lists_the_loot(make_repo, tmp_path):
     assert "| [alpha](alpha/SKILL.md) | skills/alpha | Teaches alpha \\| with a pipe. |" in index
     assert "| [beta](beta/SKILL.md) | docs/beta | Teaches beta. |" in index
     assert result.provenance.schema == "scavenge/v1"
+    # Only the skill that actually carries binary assets gets called out.
+    assert "## Binary assets carried along" in index
+    assert "- **alpha**: assets/icon.png" in index
+    assert "**beta**" not in index.split("## Binary assets carried along")[1]
+
+
+def test_routing_index_omits_binary_section_when_nothing_binary(make_repo, tmp_path):
+    root = make_repo({"docs/beta/SKILL.md": "---\nname: beta\n---\n"})
+    result = _scavenge(root, tmp_path / "crypt")
+    index = (tmp_path / "crypt/SKILL.md").read_text(encoding="utf-8")
+    assert result.skills[0].binary == []
+    assert "Binary assets" not in index
 
 
 def test_topmost_skill_wins(make_repo, tmp_path):
@@ -164,6 +181,32 @@ def test_cli_scavenge_json_round_trip(make_repo, tmp_path):
     assert {s["name"] for s in data["skills"]} == {"alpha", "beta"}
 
 
+@pytest.mark.parametrize("fmt", fsutil.ARCHIVE_FORMATS)
+def test_scavenge_archive_packages_the_crypt(make_repo, tmp_path, fmt):
+    root = make_repo(SKILLED)
+    out = tmp_path / "crypt"
+    result = _scavenge(root, out, archive=fmt)
+    assert not out.exists()  # the loose directory never survives archiving
+    archive = Path(result.out)
+    assert archive.is_file()
+    if fmt == "zip":
+        with zipfile.ZipFile(archive) as zf:
+            names = zf.namelist()
+            assert "crypt/SKILL.md" in names
+            assert "crypt/alpha/assets/icon.png" in names
+
+
+def test_cli_scavenge_zip_format(make_repo, tmp_path):
+    root = make_repo(SKILLED)
+    out = tmp_path / "crypt"
+    result = runner.invoke(
+        app, ["--plain", "scavenge", str(root), "--out", str(out), "--format", "zip"]
+    )
+    assert result.exit_code == 0, result.output
+    assert not out.exists()
+    assert (tmp_path / "crypt.zip").is_file()
+
+
 def test_cli_empty_graves_still_rest_in_peace(make_repo, tmp_path):
     root = make_repo({"README.md": "bare\n"})
     result = runner.invoke(app, ["--plain", "scavenge", str(root), "--out", str(tmp_path / "c")])
@@ -180,6 +223,19 @@ def test_tui_operation_scavenges_and_shows_the_loot(make_repo, tmp_path):
     assert (out / "alpha/SKILL.md").is_file()
     assert "| [alpha](alpha/SKILL.md) | skills/alpha |" in result.text
     assert result.summary == f"2 skills interred in {out}"
+    assert not result.cursed
+
+
+def test_tui_operation_archives_the_crypt(make_repo, tmp_path):
+    root = make_repo(SKILLED)
+    op = tui_ops.OPERATIONS_BY_KEY["scavenge"]
+    out = tmp_path / "crypt"
+    opts = op.defaults() | {"out": str(out), "format": "zip"}
+    result = op.run(resolve_source(str(root)).repo, opts)
+    assert not out.exists()
+    archive = out.with_name("crypt.zip")
+    assert archive.is_file()
+    assert result.summary == f"2 skills packaged into {archive}"
     assert not result.cursed
 
 

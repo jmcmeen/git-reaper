@@ -37,10 +37,10 @@ fallback if the REAPER DAW already owns the short one).
 | `conjure` | Bundle a repo into a single LLM-ingestible file: tree first, then every text file inlined with spec'd delimiters. `--sha256` for verifiable hashes, `--split-tokens N` to shard into context-window-sized parts. |
 | `reanimate` | The inverse of `conjure`: reconstruct a directory tree from a packed artifact. `--verify` checks per-file hashes; path traversal is refused outright. |
 | `census` | File-type census: counts, sizes, line counts, language breakdown, token estimate. Size a repo before packing it. |
-| `distill` | Skill harvesting: read a repo and emit a portable Agent Skill (`SKILL.md` + `reference/`) that teaches a model to work there — conventions, real build/test/lint commands, the structural map, the files that break most, and who to ask (`--anon` for roles). Deterministic, no network, no model calls; `--polish CMD` optionally pipes each draft's prose through your own agent command (stamps and frontmatter protected). `--profile {repo,stack,onboarding}` sets the voice; `--check skills/<name>/` exits 3 when the code has moved past the stamped sha. `necropolis distill` harvests a whole fleet into a skill library with a routing index skill at its root. |
-| `scavenge` | Scavenging: where `distill` writes a new skill, `scavenge` steals the ones already interred. Every folder holding a `SKILL.md` is lifted whole — references, scripts, binary assets, byte for byte — into a library directory with a routing `SKILL.md` indexing the loot. Ignore rules hold, name collisions get numbered, re-scavenging refreshes instead of duplicating, and `necropolis scavenge` loots a whole fleet under a two-level routing index. |
+| `distill` | Skill harvesting: read a repo and emit a portable Agent Skill (`SKILL.md` + `reference/`) that teaches a model to work there — conventions, real build/test/lint commands, the structural map, the files that break most, and who to ask (`--anon` for roles). Deterministic, no network, no model calls; `--polish CMD` optionally pipes each draft's prose through your own agent command (stamps and frontmatter protected). `--profile {repo,stack,onboarding}` sets the voice; `--check skills/<name>/` exits 3 when the code has moved past the stamped sha. `necropolis distill` harvests a whole fleet into a skill library with a routing index skill at its root. `--format zip`/`tar`/`tar.gz` packages the bundle into one archive. |
+| `scavenge` | Scavenging: where `distill` writes a new skill, `scavenge` steals the ones already interred. Every folder holding a `SKILL.md` is lifted whole — references, scripts, binary assets, byte for byte — into a library directory with a routing `SKILL.md` indexing the loot, which calls out any binary assets a skill carries by name. Ignore rules hold, name collisions get numbered, re-scavenging refreshes instead of duplicating, and `necropolis scavenge` loots a whole fleet under a two-level routing index. `--format zip`/`tar`/`tar.gz` packages the crypt into one archive. |
 | `unfinished` | Scan for TODO / FIXME / HACK / XXX markers, with authors via git blame and `--age` for how long each has haunted. |
-| `leech` | The inverse of harvest for ordinary documents: drain fenced code blocks out of a markdown file back into files. Blocks the document names (` ```python title=app.py ` or a bare path info string) keep their name; the rest are numbered by language. `--lang` filters; reanimate's path-traversal guards apply. |
+| `leech` | The inverse of harvest for ordinary documents: drain fenced code blocks out of a markdown file back into files. Blocks the document names (` ```python title=app.py ` or a bare path info string) keep their name; the rest are numbered by language. `--lang` filters; reanimate's path-traversal guards apply. `--format zip`/`tar`/`tar.gz` packages the drained blocks into one archive. |
 | `embalm` | Preserve a repo state in a deterministic, provenance-stamped `.tar.gz`: sorted entries, zeroed ownership, every timestamp pinned to the HEAD commit (byte-identical across runs), with a `PROVENANCE` block and a `MANIFEST.sha256` at the archive root. The receipt prints the archive's own sha256, so the snapshot is citable. |
 | `grimoire` | Show effective configuration, where each value came from, and stored recipes. |
 | `cast` | Run a saved recipe from the grimoire instead of retyping nine flags. |
@@ -92,7 +92,7 @@ History commands need real history, so remote sources are cloned full-depth
 | `bones` | Strip implementation, keep structure: every file's imports, signatures, and docstrings. Python via `ast`; other languages via the `git-reaper[bones]` (tree-sitter) extra. |
 | `scry` | Compare two refs: churn, most-changed files, contributors, and souls first seen in the range. |
 | `plague` | Opt-in and network-using: read dependency manifests and check pinned versions against the OSV database. `--offline` parses manifests only. The only command that leaves the crypt. |
-| `necropolis` | Fan any source-taking command across every grave in a `necropolis.toml` manifest (or a GitHub `--org`). Per-repo artifacts plus a combined `INDEX.md`. |
+| `necropolis` | Fan any source-taking command across every grave in a `necropolis.toml` manifest (or a GitHub `--org`). Per-repo artifacts plus a combined `INDEX.md`. `--format zip`/`tar`/`tar.gz` packages the whole out-dir into one archive. |
 
 Analysis commands add `--format html` for a self-contained, dark-themed
 report. `exhume --fail-on`, `omens --fail-over`, `plague --fail-on`, a broken
@@ -109,6 +109,7 @@ reaper distill --check skills/git-reaper/     # is the skill still true? (exit 3
 reaper distill . --polish 'claude -p "tighten this skill draft"'  # your model, your key
 reaper necropolis distill --org acme --out-dir skills/  # a skill library + routing skill
 reaper scavenge https://github.com/anthropics/skills -o crypt/  # steal skills already there
+reaper scavenge . --format zip                            # crypt.zip instead of a loose dir
 reaper unfinished . --age
 reaper cast nightly-pack
 reaper limbs . --format json | jq .file_count

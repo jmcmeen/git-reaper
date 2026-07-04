@@ -209,16 +209,22 @@ def _conjure(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
 
 def _scavenge(repo: RepoRef, opts: dict[str, Any]) -> ReapResult:
     out_dir = Path(str(opts.get("out") or "").strip() or "skill-crypt")
-    result = scavenge_core.scavenge(repo, out_dir, invoked=_invoked("scavenge"))
+    fmt = opts["format"]
+    archive = fmt if fmt in fsutil.ARCHIVE_FORMATS else None
+    result = scavenge_core.scavenge(repo, out_dir, invoked=_invoked("scavenge"), archive=archive)
     if not result.skills:
         summary = "the graves were empty"
         text = f"No {scavenge_core.MARKER} anywhere in the source; nothing was written.\n"
     else:
-        summary = f"{len(result.skills)} skills interred in {out_dir}"
-        # The artifact is the routing index the scavenge just wrote: the loot,
-        # exactly as an agent will read it.
+        summary = (
+            f"{len(result.skills)} skills packaged into {result.out}"
+            if archive
+            else f"{len(result.skills)} skills interred in {out_dir}"
+        )
+        # Rendered straight from result, not re-read from disk, so this still
+        # works when the crypt was archived and out_dir no longer exists.
         text = scavenge_core.render_crypt_skill(result, out_dir)
-    if opts["format"] == "json":
+    if fmt == "json":
         text = jsonfmt.render(result)
     return ReapResult(text, summary)
 
@@ -494,7 +500,7 @@ OPERATIONS: list[Operation] = [
         _scavenge,
         (
             TextOpt("out", "out (the library directory)", default="skill-crypt"),
-            _format_opt("md", "json"),
+            _format_opt("md", "json", *fsutil.ARCHIVE_FORMATS),
         ),
         writes=True,
     ),

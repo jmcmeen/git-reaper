@@ -358,11 +358,16 @@ stdout -- a `claude -p` wrapper, a local model, anything you trust), while
 frontmatter and provenance stamps are held back and reattached, so a
 polisher may smooth prose but never rewrite facts of origin.
 
+`--format` also takes `zip`, `tar`, or `tar.gz` to package the bundle into
+a single archive instead of a loose directory (skip `--check` afterward --
+it reads a skill directory, not an archive).
+
 ```sh
 reaper distill .                                # write skills/<name>/
 reaper distill . --profile onboarding --anon -o skills/repo-guide
 reaper distill --check skills/repo-guide        # exit 3 once stale
 reaper distill . --polish "claude -p 'tighten this prose'"
+reaper distill . --format tar.gz                # skills/<name>.tar.gz
 ```
 
 At fleet scale, `reaper necropolis distill` writes one skill per grave
@@ -377,7 +382,10 @@ assets, byte for byte -- and reburied in a library directory (default
 `skill-crypt/`), with a routing `SKILL.md` at the root that indexes the
 loot, so the crypt itself is loadable. Ignore rules hold on the way out:
 a gitignored skill folder is never found, and ignored files inside a
-taken folder stay buried.
+taken folder stay buried. The report (and the routing `SKILL.md` itself)
+calls out any binary/non-text assets a skill carries along by name, so a
+folder full of reference docs and scripts doesn't look identical to one
+that also drags in images or other binary files.
 
 Topmost wins (a `SKILL.md` nested inside another skill's folder rides
 along instead of being lifted twice), two skills sharing a folder name
@@ -386,9 +394,14 @@ folders rather than accumulating copies. A repo whose root holds the
 `SKILL.md` is taken whole under the source's name. Finding nothing
 writes nothing.
 
+`--format` also takes `zip`, `tar`, or `tar.gz` to package the crypt into
+a single archive instead of leaving it as a loose directory -- entries
+sorted and deterministic, same discipline as `embalm`.
+
 ```sh
 reaper scavenge https://github.com/anthropics/skills --out skill-crypt/
 reaper scavenge . -x "vendor/*" --format json | jq '.skills[].path'
+reaper scavenge . --format zip                              # skill-crypt.zip
 reaper necropolis scavenge --org my-org --out-dir crypt/   # a fleet's loot
 ```
 
@@ -402,11 +415,16 @@ Fan any source-taking reaper command across every grave in a
 `necropolis.toml` manifest (or a GitHub org via `--org` and the `gh` CLI).
 Writes a per-grave artifact plus a combined `INDEX.md` that records every
 outcome, failures included. A failed grave never stops the fleet.
+Necropolis's own `--format` also takes `zip`, `tar`, or `tar.gz` to
+package the whole `--out-dir` (every grave's artifact plus `INDEX.md`)
+into one archive -- separate from any `--format` you pass through to the
+fanned-out command itself.
 
 ```sh
 reaper necropolis harvest --tag docs --out-dir out/
 reaper necropolis exhume --fail-on any --out-dir audit/   # exit 3 if cursed
 reaper necropolis census --org my-org --out-dir survey/
+reaper necropolis harvest --tag docs --out-dir out/ --format zip
 ```
 
 ```toml
@@ -465,12 +483,14 @@ reaper banshee nightly-pack -s docs/ --interval 5 --once
 The inverse of harvest for ordinary markdown: drain fenced code blocks back
 into files. Blocks the document names (` ```python title=app.py ` or a bare
 path info string) keep their name; the rest are numbered by language.
-Reanimate's path-traversal guards apply.
+Reanimate's path-traversal guards apply. `--format` also takes `zip`,
+`tar`, or `tar.gz` to package the drained blocks into a single archive.
 
 ```sh
 reaper leech TUTORIAL.md --out src/
 reaper leech notes.md --lang python            # only the python blocks
 cat model-output.md | reaper leech - --out risen/
+reaper leech TUTORIAL.md --out src/ --format zip
 ```
 
 ### embalm

@@ -432,6 +432,35 @@ def test_necropolis_cli(make_repo, tmp_path):
     assert "1 of 1 graves reaped" in (out_dir / "INDEX.md").read_text()
 
 
+def test_necropolis_cli_zip_format(make_repo, tmp_path):
+    import zipfile
+
+    alpha = make_repo(FILES, name="alpha")
+    manifest = tmp_path / "necropolis.toml"
+    manifest.write_text(f'[[grave]]\nsource = "{alpha.as_posix()}"\n')
+    out_dir = tmp_path / "fleet"
+    result = runner.invoke(
+        app,
+        [
+            "--plain",
+            "necropolis",
+            "census",
+            "--manifest",
+            str(manifest),
+            "--out-dir",
+            str(out_dir),
+            "--format",
+            "zip",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert not out_dir.exists()
+    archive = out_dir.with_name("fleet.zip")
+    assert archive.is_file()
+    with zipfile.ZipFile(archive) as zf:
+        assert "fleet/alpha.md" in zf.namelist()
+
+
 def test_necropolis_refuses_recursion(tmp_path):
     result = runner.invoke(app, ["--plain", "necropolis", "necropolis"])
     assert result.exit_code == 1

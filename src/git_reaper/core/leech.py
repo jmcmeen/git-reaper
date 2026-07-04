@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from git_reaper import fsutil
 from git_reaper.core.provenance import make_provenance
 from git_reaper.core.unpack import ReanimateError, _unsafe
 from git_reaper.models import LeechBlock, LeechResult, RepoRef
@@ -174,8 +175,15 @@ def _dedupe(path: str, contents: dict[str, str]) -> str:
     raise LeechError(f"a thousand blocks named {path!r}; name some of them")
 
 
-def write_blocks(contents: dict[str, str], out_dir: Path, force: bool = False) -> None:
-    """Write the drained blocks under out_dir (must be empty unless force)."""
+def write_blocks(
+    contents: dict[str, str], out_dir: Path, force: bool = False, archive: str | None = None
+) -> Path:
+    """Write the drained blocks under out_dir (must be empty unless force).
+
+    archive, one of fsutil.ARCHIVE_FORMATS, packages out_dir into a single
+    file instead of leaving it as a loose directory. Returns the final path
+    (out_dir itself, or the archive when one was requested).
+    """
     if out_dir.exists() and not force and any(out_dir.iterdir()):
         raise ReanimateError(
             f"{out_dir} is not empty; give an empty plot or use --force to overwrite"
@@ -185,3 +193,8 @@ def write_blocks(contents: dict[str, str], out_dir: Path, force: bool = False) -
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("w", encoding="utf-8", newline="") as fh:
             fh.write(content)
+    if archive:
+        archived = fsutil.make_archive(out_dir, archive)
+        fsutil.force_rmtree(out_dir)
+        return archived
+    return out_dir
