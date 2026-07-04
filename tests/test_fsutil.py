@@ -53,7 +53,9 @@ def test_human_size():
 def _tree(tmp_path, name="loot"):
     root = tmp_path / name
     (root / "sub").mkdir(parents=True)
-    (root / "a.md").write_text("a\n", encoding="utf-8")
+    # write_text would translate \n -> \r\n on Windows, making the packed
+    # bytes (and this test's exact-byte assertions) platform-dependent.
+    (root / "a.md").write_bytes(b"a\n")
     (root / "sub" / "b.bin").write_bytes(b"\x00\x01\x02")
     return root
 
