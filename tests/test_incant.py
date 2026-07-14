@@ -107,3 +107,36 @@ def test_usage_shapes_follow_the_cli_grammar():
     assert incant.usage(by_key["autopsy"]) == "autopsy PATH [SOURCE]"
     assert incant.usage(by_key["veil"]) == "veil FILE"
     assert incant.usage(by_key["census"]) == "census [SOURCE]"
+
+
+# -- the option kinds the CLI's flags need ------------------------------------
+
+
+def test_parse_repeats_a_list_flag_the_way_the_cli_does():
+    spell = incant.parse("/census . --exclude '*.lock' --exclude dist")
+    assert spell.kind == "ritual"
+    assert spell.opts["exclude"] == "*.lock dist"
+    # and it round-trips back out as two flags, not one joined string
+    assert spell.argv == ("reaper", "census", ".", "--exclude", "*.lock", "--exclude", "dist")
+
+
+def test_parse_takes_a_fractional_threshold():
+    spell = incant.parse("/possession . --threshold 0.9")
+    assert spell.kind == "ritual"
+    assert spell.opts["threshold"] == 0.9
+    assert spell.argv == ("reaper", "possession", ".", "--threshold", "0.9")
+    assert "needs a number" in incant.parse("/possession . --threshold most").error
+
+
+def test_a_default_valued_flag_stays_out_of_the_incantation():
+    # the twin should be as short as what a human would type
+    spell = incant.parse("/possession . --threshold 0.75")  # the CLI's own default
+    assert spell.argv == ("reaper", "possession", ".")
+
+
+def test_flag_help_names_every_option_shape():
+    by_key = {op.key: op for op in OPERATIONS}
+    assert "--threshold X.Y" in incant.flag_help(by_key["possession"])
+    assert "--exclude TEXT (repeatable)" in incant.flag_help(by_key["census"])
+    assert "--limit N" in incant.flag_help(by_key["haunt"])
+    assert "--format {md|json}" in incant.flag_help(by_key["bones"])

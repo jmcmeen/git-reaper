@@ -9,6 +9,7 @@ fleet format.
 
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 from pathlib import Path
 
@@ -16,13 +17,13 @@ from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Select, TextArea
 
 from git_reaper.core import fleet as fleet_core
-from git_reaper.core.source import resolve_source
 from git_reaper.tui.widgets import HelpScreen, ScytheSpinner
-from git_reaper.tui_ops import OPERATIONS, OPERATIONS_BY_KEY, Operation
+from git_reaper.tui_ops import OPERATIONS, OPERATIONS_BY_KEY, Operation, resolve
 
 _HELP = (
     "[b]the necropolis board[/b]\n"
@@ -127,27 +128,34 @@ class NecropolisScreen(Screen[None]):
     def _fleet_worker(self, op: Operation, graves: list[fleet_core.Grave]) -> None:
         cursed = 0
         failed = 0
-        for grave in graves:
-            self.app.call_from_thread(self.query_one(ScytheSpinner).stage, f"reaping {grave.name}")
-            try:
-                resolved = resolve_source(grave.source, depth=None)
-                opts = op.defaults()
-                if "out" in opts:
-                    # Writing rituals get one bundle per grave, exactly as the
-                    # CLI fan-out does -- a shared out dir would let one
-                    # grave's loot refresh-clobber another's.
-                    opts["out"] = str(Path(str(opts["out"])) / grave.name)
-                result = op.run(resolved.repo, opts)
-            except Exception as exc:  # a grave must never take the fleet down
-                failed += 1
-                self.app.call_from_thread(self._update_row, grave.name, "failed", str(exc), None)
-                continue
-            cursed += 1 if result.cursed else 0
-            fate = "CURSED" if result.cursed else "rest in peace"
-            self.app.call_from_thread(
-                self._update_row, grave.name, fate, result.summary, result.text
-            )
-        self.app.call_from_thread(self._fleet_done, len(graves), cursed, failed)
+        try:
+            for grave in graves:
+                self.app.call_from_thread(
+                    self.query_one(ScytheSpinner).stage, f"reaping {grave.name}"
+                )
+                try:
+                    opts = op.defaults()
+                    resolved = resolve(grave.source, opts)
+                    if "out" in opts:
+                        # Writing rituals get one bundle per grave, exactly as the
+                        # CLI fan-out does -- a shared out dir would let one
+                        # grave's loot refresh-clobber another's.
+                        opts["out"] = str(Path(str(opts["out"])) / grave.name)
+                    result = op.run(resolved.repo, opts)
+                except Exception as exc:  # a grave must never take the fleet down
+                    failed += 1
+                    row = (grave.name, "failed", str(exc), None)
+                    self.app.call_from_thread(self._update_row, *row)
+                    continue
+                cursed += 1 if result.cursed else 0
+                fate = "CURSED" if result.cursed else "rest in peace"
+                self.app.call_from_thread(
+                    self._update_row, grave.name, fate, result.summary, result.text
+                )
+        finally:
+            # the yard is released however the reaping ended: a render that
+            # throws must not leave `reap the fleet` locked out for good.
+            self.app.call_from_thread(self._fleet_done, len(graves), cursed, failed)
 
     def _update_row(self, name: str, fate: str, summary: str, artifact: str | None) -> None:
         table = self.query_one("#graves", DataTable)
@@ -161,13 +169,14 @@ class NecropolisScreen(Screen[None]):
 
     def _fleet_done(self, total: int, cursed: int, failed: int) -> None:
         self._reaping = False
-        self.query_one(ScytheSpinner).stop()
-        note = f"reaped {total - failed}/{total} graves"
-        if cursed:
-            note += f", {cursed} cursed"
-        if failed:
-            note += f", {failed} failed"
-        self._status(note + " - select a row to read its artifact")
+        with contextlib.suppress(NoMatches):  # the chamber may already be gone
+            self.query_one(ScytheSpinner).stop()
+            note = f"reaped {total - failed}/{total} graves"
+            if cursed:
+                note += f", {cursed} cursed"
+            if failed:
+                note += f", {failed} failed"
+            self._status(note + " - select a row to read its artifact")
 
     # -- drill-in ---------------------------------------------------------------
 

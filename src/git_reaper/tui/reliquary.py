@@ -8,12 +8,14 @@ workflow, one screen.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
 
@@ -92,23 +94,28 @@ class ReliquaryScreen(Screen[None]):
     def _triage_worker(self, source: str) -> None:
         try:
             resolved = resolve_source(source, depth=None)
+            report = self._run_triage(resolved.repo)
+            self.app.call_from_thread(self._show_report, report)
         except Exception as exc:
             self.app.call_from_thread(self._triage_failed, str(exc))
-            return
-        report = self._run_triage(resolved.repo)
-        self.app.call_from_thread(self._show_report, report)
+        finally:
+            # the scythe stops however the triage ended, so a failed render
+            # cannot leave the slab looking like it is still being read.
+            self.app.call_from_thread(self._stop_scythe)
+
+    def _stop_scythe(self) -> None:
+        with contextlib.suppress(NoMatches):  # a modal is up, or the app is gone
+            self.query_one(ScytheSpinner).stop()
 
     @staticmethod
     def _run_triage(repo: RepoRef) -> TriageReport:
         return triage(repo)
 
     def _triage_failed(self, message: str) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._status(f"the triage failed: {message}")
         self.notify(message, severity="error", title="the triage failed")
 
     def _show_report(self, report: TriageReport) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._report = report
         table = self.query_one("#slab", DataTable)
         table.clear()

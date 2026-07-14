@@ -21,6 +21,8 @@ from git_reaper.tui_ops import (
     OPERATIONS,
     OPERATIONS_BY_KEY,
     ChoiceOpt,
+    FloatOpt,
+    ListOpt,
     NumberOpt,
     Operation,
     ToggleOpt,
@@ -163,11 +165,21 @@ def parse(line: str) -> Incantation:
             if not value.lstrip("-").isdigit():
                 return Incantation(kind="error", error=f"{token} needs a whole number")
             opts[flag.name] = int(value)
+        elif isinstance(flag, FloatOpt):
+            try:
+                opts[flag.name] = float(value)
+            except ValueError:
+                return Incantation(kind="error", error=f"{token} needs a number")
         elif isinstance(flag, ChoiceOpt):
             if value not in flag.choices:
                 choices = ", ".join(flag.choices)
                 return Incantation(kind="error", error=f"{token} must be one of: {choices}")
             opts[flag.name] = value
+        elif isinstance(flag, ListOpt):
+            # repeatable, exactly as the CLI's --exclude is: each occurrence
+            # adds a token, and the panel shows them space-separated.
+            seen = str(opts.get(flag.name) or "").strip()
+            opts[flag.name] = f"{seen} {value}".strip()
         else:
             opts[flag.name] = value
         i += 2
@@ -198,6 +210,10 @@ def flag_help(op: Operation) -> str:
             parts.append(f"{flag} {{{'|'.join(spec.choices)}}}")
         elif isinstance(spec, NumberOpt):
             parts.append(f"{flag} N")
+        elif isinstance(spec, FloatOpt):
+            parts.append(f"{flag} X.Y")
+        elif isinstance(spec, ListOpt):
+            parts.append(f"{flag} TEXT (repeatable)")
         else:
             parts.append(f"{flag} TEXT")
     flags = "  ".join(parts) if parts else "no flags"

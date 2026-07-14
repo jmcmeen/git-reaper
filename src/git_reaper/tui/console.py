@@ -11,20 +11,21 @@ this constructs reproducible invocations.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import Any
 
 from textual import events, on, work
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Input, OptionList, Static, TextArea
 from textual.widgets.option_list import Option
 
 from git_reaper import config, incant
-from git_reaper.core.source import resolve_source
 from git_reaper.tui.widgets import HelpScreen, SaveScreen, ScytheSpinner
-from git_reaper.tui_ops import Operation
+from git_reaper.tui_ops import Operation, resolve
 
 _HELP = (
     "[b]the incantation console[/b]\n"
@@ -75,7 +76,9 @@ class ConsoleScreen(Screen[None]):
     def _typed(self, event: Input.Changed) -> None:
         text = event.value
         menu = self.query_one("#suggestions", OptionList)
-        first_word = " " not in text.strip()
+        # lstrip, not strip: once a word is finished (the trailing space of a
+        # tab-completion), the ritual is chosen and the menu has said its piece.
+        first_word = " " not in text.lstrip()
         if text.strip() and first_word:
             suggestions = incant.suggest(text)
             menu.clear_options()
@@ -168,21 +171,26 @@ class ConsoleScreen(Screen[None]):
     @work(thread=True, exclusive=True)
     def _cast_worker(self, op: Operation, source: str, opts: dict[str, Any], argv: str) -> None:
         try:
-            resolved = resolve_source(source, depth=None)
+            resolved = resolve(source, opts)  # the line's --ref rides along
             result = op.run(resolved.repo, opts)
+            self.app.call_from_thread(self._cast_done, argv, result.text, result.summary)
         except Exception as exc:
             self.app.call_from_thread(self._cast_failed, argv, str(exc))
-            return
-        self.app.call_from_thread(self._cast_done, argv, result.text, result.summary)
+        finally:
+            # the scythe stops however the cast ended, or the console reads as
+            # still casting long after the worker died.
+            self.app.call_from_thread(self._stop_scythe)
+
+    def _stop_scythe(self) -> None:
+        with contextlib.suppress(NoMatches):  # a modal is up, or the app is gone
+            self.query_one(ScytheSpinner).stop()
 
     def _cast_done(self, argv: str, artifact: str, summary: str) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._artifact = artifact
         self._log(f"$ {argv}\n{artifact}")
         self.notify(f"{summary} (ctrl+s or /save to inter it)")
 
     def _cast_failed(self, argv: str, message: str) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._log(f"$ {argv}\n! the ritual failed: {message}")
 
     # -- meta commands -----------------------------------------------------------

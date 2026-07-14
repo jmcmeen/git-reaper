@@ -104,9 +104,12 @@ class ReaperApp(App[None]):
     #recipes { height: 8; }
     #main { height: 1fr; }
     #ritual-name { height: 1; color: $primary; text-style: bold; padding: 0 1; }
-    #options { height: auto; max-height: 12; border: round $primary; margin: 0 1; padding: 0 1; }
+    /* rituals carry as many options as their CLI command does (limbs has
+       seven), so the panel scrolls -- but wide enough that no label wraps,
+       and tall enough to show five rows before it has to. */
+    #options { height: auto; max-height: 15; border: round $primary; margin: 0 1; padding: 0 1; }
     .opt-row { height: 3; }
-    .opt-row Label { width: 26; padding: 1 0 0 0; }
+    .opt-row Label { width: 30; padding: 1 0 0 0; }
     .opt-toggle { height: 3; }
     .opt-toggle Label { width: 1fr; padding: 1 0 0 1; }
     #preview { height: 1fr; border: round $primary; }
@@ -117,9 +120,20 @@ class ReaperApp(App[None]):
     #badge { color: $background; background: $error; text-style: bold; padding: 0 1; display: none }
     .heading { text-style: bold; padding: 1 1 0 1; }
     #reap { margin: 1 1; width: 100%; }
+
+    /* modals. A ModalScreen is a full-screen container, so without an align
+       its dialog would sit in the top-left corner -- center every one of them
+       (the type selector catches SaveScreen, BrowseScreen, HelpScreen alike). */
+    ModalScreen { align: center middle; }
     #dialog { padding: 1 2; width: 64; height: auto; border: round $primary; background: $surface; }
     #browse { padding: 1 2; width: 80; height: 30; border: round $primary; background: $surface; }
     #help { padding: 1 2; width: 76; height: auto; border: round $primary; background: $surface; }
+    #browse-row { height: 3; }
+    #browse-row Button { width: 6; margin-right: 1; }
+    #browse-path { width: 1fr; }
+    #browse-hint { height: 1; color: $text-muted; }
+    #dialog-buttons { height: 3; }
+    #dialog-buttons Button { margin-right: 2; }
     #tree { height: 1fr; }
 
     /* the grimoire */

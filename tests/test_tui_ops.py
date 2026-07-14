@@ -47,6 +47,68 @@ def test_registry_keys_are_unique_and_indexed():
     assert set(tui_ops.OPERATIONS_BY_KEY) == set(keys)
 
 
+# -- parity with the CLI -------------------------------------------------------
+#
+# The chambers must offer what `reaper <key> --help` offers, or the TUI quietly
+# becomes a lesser tool. These read the real Typer app, so a flag added to the
+# CLI and forgotten in the registry fails here rather than in a user's hands.
+
+#: Flags no chamber offers, and why. `--out`/`--schema` are CLI plumbing (a
+#: chamber saves with `s` and never prints a schema); the CI gates exit 3
+#: instead of drawing, and a chamber badges what it found instead.
+_CLI_ONLY = {"--out", "--schema", "--help", "--fail-on", "--fail-over"}
+
+#: Per-ritual omissions, each deliberate.
+_CLI_ONLY_PER_OP = {
+    # the *clone* depth. One Sanctum source is reaped by ritual after ritual,
+    # so the crypt is always dug whole; a shallow one would blind whichever
+    # history ritual came next. (limbs' --depth is a tree depth, and is offered.)
+    "harvest": {"--depth"},
+    "conjure": {"--depth"},
+    "scavenge": {"--depth"},
+    # veil --report writes a second file; a chamber shows one artifact.
+    "veil": {"--report"},
+}
+
+
+def _cli_params(key: str) -> list[set[str]]:
+    """One set of long names per CLI parameter -- aliases ride together, so
+    `--pattern/--glob` counts as one thing a chamber must offer, not two."""
+    import typer
+
+    from git_reaper.cli import app as cli_app
+
+    command = typer.main.get_command(cli_app).commands[key]  # type: ignore[attr-defined]
+    groups = [{opt for opt in param.opts if opt.startswith("--")} for param in command.params]
+    return [group for group in groups if group]
+
+
+def _tui_flags(op: tui_ops.Operation) -> set[str]:
+    """Every flag the chamber's option panel renders (the positional is not one)."""
+    return {"--" + spec.name.replace("_", "-") for spec in op.options if spec.name != op.positional}
+
+
+@pytest.mark.parametrize("op", tui_ops.OPERATIONS, ids=lambda op: op.key)
+def test_every_chamber_option_is_a_real_cli_flag(op):
+    known = {opt for group in _cli_params(op.key) for opt in group}
+    unknown = _tui_flags(op) - known
+    assert not unknown, f"{op.key} offers {unknown}, which `reaper {op.key}` does not take"
+
+
+@pytest.mark.parametrize("op", tui_ops.OPERATIONS, ids=lambda op: op.key)
+def test_every_cli_flag_is_offered_by_its_chamber(op):
+    omitted = _CLI_ONLY | _CLI_ONLY_PER_OP.get(op.key, set())
+    if op.positional:  # rides as the CLI's positional argument, not as a flag
+        omitted.add("--" + op.positional)
+    if op.source_arg == "flag":  # `autopsy PATH -s SOURCE`: the chamber's source box
+        omitted.add("--source")
+    offered = _tui_flags(op)
+    missing = [
+        group for group in _cli_params(op.key) if not (group & offered) and not (group & omitted)
+    ]
+    assert not missing, f"{op.key} does not offer {missing}, which `reaper {op.key}` takes"
+
+
 def test_every_operation_belongs_to_a_known_group():
     for op in tui_ops.OPERATIONS:
         assert op.group in tui_ops.GROUPS, op.key
@@ -168,6 +230,97 @@ def test_defaults_cover_every_option():
     for op in tui_ops.OPERATIONS:
         defaults = op.defaults()
         assert set(defaults) == {opt.name for opt in op.options}, op.key
+
+
+# -- the options the CLI has always had, now that the chambers have them too --
+
+
+def test_ref_option_reaches_the_crypt(necropolis):
+    # the ref rides on the *resolution*, not the ritual: the crypt is opened at
+    # that ref, and every history core reads through it (git log <ref>).
+    on_main = tui_ops.resolve(str(necropolis), {})
+    on_feature = tui_ops.resolve(str(necropolis), {"ref": "feature"})
+    assert on_feature.repo.ref == "feature"
+
+    chronicle = tui_ops.OPERATIONS_BY_KEY["chronicle"]
+    opts = chronicle.defaults()
+    main_text = chronicle.run(on_main.repo, opts).summary
+    feature_text = chronicle.run(on_feature.repo, opts).summary
+    # the feature branch carries one commit main never saw
+    assert main_text == "5 commits"
+    assert feature_text == "6 commits"
+
+
+def test_exclude_option_skips_globs(necropolis):
+    census = tui_ops.OPERATIONS_BY_KEY["census"]
+    everything = _run(census, necropolis)
+    without_md = _run(census, necropolis, exclude="*.md, *.py")
+    assert ".md" in everything.text
+    assert ".md" not in without_md.text and ".py" not in without_md.text
+
+
+def test_limbs_offers_the_trees_own_shape(necropolis):
+    limbs = tui_ops.OPERATIONS_BY_KEY["limbs"]
+    assert "README.md" in _run(limbs, necropolis).text
+    assert "README.md" not in _run(limbs, necropolis, dirs_only=True).text
+    assert "src" in _run(limbs, necropolis, dirs_only=True).text
+    # depth 1 keeps the top level's crypts but never descends into them
+    shallow = _run(limbs, necropolis, depth=1).text
+    assert "src" in shallow and "main.py" not in shallow
+    assert "lines" in _run(limbs, necropolis, lines=True, sizes=True).text
+
+
+def test_harvest_takes_a_pattern_and_a_cap(necropolis):
+    harvest = tui_ops.OPERATIONS_BY_KEY["harvest"]
+    assert "README.md" in _run(harvest, necropolis).text  # the default *.md
+    only_py = _run(harvest, necropolis, pattern="*.py")
+    assert "main.py" in only_py.text and "README.md" not in only_py.text
+
+
+def test_conjure_can_veil_and_hash_while_it_packs(make_repo):
+    root = make_repo({"leak.env": f"KEY={AWS_KEY}\n"})
+    conjure = tui_ops.OPERATIONS_BY_KEY["conjure"]
+    assert AWS_KEY in _run(conjure, root).text
+    veiled = _run(conjure, root, veil=True).text
+    assert AWS_KEY not in veiled  # the secret never leaves in the bundle
+    assert "sha256" in _run(conjure, root, sha256=True).text
+
+
+def test_chronicle_max_count_takes_only_the_newest(necropolis):
+    chronicle = tui_ops.OPERATIONS_BY_KEY["chronicle"]
+    assert _run(chronicle, necropolis).summary == "5 commits"
+    assert _run(chronicle, necropolis, max_count=2).summary == "2 commits"
+
+
+def test_possession_threshold_and_its_bounds(necropolis):
+    possession = tui_ops.OPERATIONS_BY_KEY["possession"]
+    assert ">= 100%" in _run(possession, necropolis, threshold=1.0).text
+    assert ">= 10%" in _run(possession, necropolis, threshold=0.1).text
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        _run(possession, necropolis, threshold=1.5)
+    with pytest.raises(ValueError, match="must be a number"):
+        _run(possession, necropolis, threshold="most of it")
+
+
+def test_wake_since_and_revenant_fixes_reach_their_cores(necropolis):
+    wake = tui_ops.OPERATIONS_BY_KEY["wake"]
+    assert "since v1.0.0" in _run(wake, necropolis, since="v1.0.0").summary
+    revenant = tui_ops.OPERATIONS_BY_KEY["revenant"]
+    assert _run(revenant, necropolis, fixes=1).text.strip()
+
+
+def test_exorcise_can_skip_the_secret_pass(make_repo):
+    root = make_repo({"leak.env": f"KEY={AWS_KEY}\n"})
+    exorcise = tui_ops.OPERATIONS_BY_KEY["exorcise"]
+    assert _run(exorcise, root).cursed  # the secret is a body to expel
+    assert not _run(exorcise, root, no_secrets=True).cursed  # bloat only, and it is small
+
+
+def test_a_size_option_speaks_the_cli_s_size_grammar(necropolis):
+    doppelgangers = tui_ops.OPERATIONS_BY_KEY["doppelgangers"]
+    assert _run(doppelgangers, necropolis, min_size="4KB").text.strip()
+    with pytest.raises(ValueError):
+        _run(doppelgangers, necropolis, min_size="a handful")
 
 
 # -- incantation args (the headless twin) ------------------------------------

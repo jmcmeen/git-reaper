@@ -7,12 +7,14 @@ ref deltas. All three drive the same history core the CLI uses.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, TextArea
 
@@ -105,18 +107,21 @@ class SeanceScreen(Screen[None]):
             with invoker("reaper summon"):
                 souls = history_core.souls(resolved.repo, heatmap=True)
                 chronicle = history_core.chronicle(resolved.repo)
+            self.app.call_from_thread(self._show_history, souls.heatmap or [], chronicle.commits)
         except Exception as exc:
             self.app.call_from_thread(self._load_failed, str(exc))
-            return
-        self.app.call_from_thread(self._show_history, souls.heatmap or [], chronicle.commits)
+        finally:
+            self.app.call_from_thread(self._stop_scythe)
+
+    def _stop_scythe(self) -> None:
+        with contextlib.suppress(NoMatches):  # a modal is up, or the app is gone
+            self.query_one(ScytheSpinner).stop()
 
     def _load_failed(self, message: str) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._status(f"the seance failed: {message}")
         self.notify(message, severity="error", title="the seance failed")
 
     def _show_history(self, grid: list[list[int]], commits: list[CommitEntry]) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._commits = commits
         heatmap = self.query_one("#heatmap", DataTable)
         heatmap.clear()
@@ -197,14 +202,14 @@ class SeanceScreen(Screen[None]):
             resolved = resolve_source(source, depth=None)
             with invoker("reaper summon"):
                 result = scry_core.scry(resolved.repo, ref_a, ref_b)
+            text = markdown.render_scry(result)
+            self.app.call_from_thread(self._show_scry, ref_a, ref_b, text)
         except Exception as exc:
             self.app.call_from_thread(self._load_failed, str(exc))
-            return
-        text = markdown.render_scry(result)
-        self.app.call_from_thread(self._show_scry, ref_a, ref_b, text)
+        finally:
+            self.app.call_from_thread(self._stop_scythe)
 
     def _show_scry(self, ref_a: str, ref_b: str, text: str) -> None:
-        self.query_one(ScytheSpinner).stop()
         self.query_one("#board-preview", TextArea).text = text
         self._status(f"the vision of {ref_a}..{ref_b} is below")
 

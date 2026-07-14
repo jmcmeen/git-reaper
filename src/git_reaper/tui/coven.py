@@ -44,8 +44,7 @@ from textual.widgets.option_list import Option
 
 from git_reaper import config, incant
 from git_reaper.config import GrimoireError
-from git_reaper.core.source import resolve_source
-from git_reaper.models import Rite, RiteStep
+from git_reaper.models import RepoRef, Rite, RiteStep
 from git_reaper.rite import ELIGIBLE_STEP_COMMANDS, SOURCE_PLACEHOLDER
 from git_reaper.tui.widgets import (
     HelpScreen,
@@ -53,7 +52,7 @@ from git_reaper.tui.widgets import (
     collect_option_values,
     mount_option_widgets,
 )
-from git_reaper.tui_ops import OPERATIONS, Operation, incantation_argv
+from git_reaper.tui_ops import OPERATIONS, Operation, incantation_argv, resolve
 
 #: Only rituals whose CLI output a rite step can capture (--format json,
 #: --out) can join a chain -- the same gate `reaper perform` enforces.
@@ -441,50 +440,75 @@ class CovenScreen(Screen[None]):
         total = len(steps) * len(sources)
         ok = 0
         failed = 0
-        for source in sources:
-            try:
-                resolved = resolve_source(source, depth=None)
-            except Exception as exc:  # a bad source must not take the run down
+        crypts: dict[tuple[str, str], RepoRef | Exception] = {}
+        try:
+            for run, source in enumerate(sources):
                 for i, step in enumerate(steps):
-                    failed += 1
                     label = step.name or step.command
-                    self.app.call_from_thread(self._add_row, source, i, label, "failed", str(exc))
-                continue
-            for i, step in enumerate(steps):
-                label = step.name or step.command
-                self.app.call_from_thread(
-                    self.query_one(ScytheSpinner).stage, f"{step.command} @ {source}"
-                )
-                spell = incant.parse(shlex.join(["reaper", step.command, *step.args]))
-                if spell.kind != "ritual" or spell.op is None:
-                    failed += 1
-                    message = spell.error or "not a runnable step"
-                    self.app.call_from_thread(self._add_row, source, i, label, "failed", message)
-                    continue
-                try:
-                    result = spell.op.run(resolved.repo, dict(spell.opts))
-                except Exception as exc:
-                    failed += 1
-                    self.app.call_from_thread(self._add_row, source, i, label, "failed", str(exc))
-                    continue
-                ok += 1
-                fate = "CURSED" if result.cursed else "ok"
-                self.app.call_from_thread(
-                    self._add_row, source, i, label, fate, result.summary, result.text
-                )
-        self.app.call_from_thread(self._run_done, total, ok, failed)
+                    self.app.call_from_thread(
+                        self.query_one(ScytheSpinner).stage, f"{step.command} @ {source}"
+                    )
+                    # each step carries its own args (and so its own --ref), so each
+                    # step resolves for itself -- cached, so one crypt is dug once.
+                    spell = incant.parse(shlex.join(["reaper", step.command, *step.args]))
+                    if spell.kind != "ritual" or spell.op is None:
+                        failed += 1
+                        message = spell.error or "not a runnable step"
+                        row = (run, i, source, label, "failed", message)
+                        self.app.call_from_thread(self._add_row, *row)
+                        continue
+                    opts = dict(spell.opts)
+                    try:
+                        repo = self._crypt(crypts, source, opts)
+                        result = spell.op.run(repo, opts)
+                    except Exception as exc:  # a bad step must not take the run down
+                        failed += 1
+                        row = (run, i, source, label, "failed", str(exc))
+                        self.app.call_from_thread(self._add_row, *row)
+                        continue
+                    ok += 1
+                    fate = "CURSED" if result.cursed else "ok"
+                    self.app.call_from_thread(
+                        self._add_row, run, i, source, label, fate, result.summary, result.text
+                    )
+        finally:
+            # the rite is over however it ended. Releasing the chamber here and
+            # not at the bottom means a render that throws cannot leave the
+            # scythe swinging over a dead worker with `run` locked out forever.
+            self.app.call_from_thread(self._run_done, total, ok, failed)
+
+    @staticmethod
+    def _crypt(
+        crypts: dict[tuple[str, str], RepoRef | Exception], source: str, opts: dict[str, object]
+    ) -> RepoRef:
+        """The crypt for this (source, ref), dug at most once per run -- a dead
+        source stays dead too, so a bad URL is not re-cloned once per step."""
+        key = (source, str(opts.get("ref") or ""))
+        if key not in crypts:
+            try:
+                crypts[key] = resolve(source, dict(opts)).repo
+            except Exception as exc:
+                crypts[key] = exc
+        found = crypts[key]
+        if isinstance(found, Exception):
+            raise found
+        return found
 
     def _add_row(
         self,
-        source: str,
+        run: int,
         index: int,
+        source: str,
         label: str,
         fate: str,
         summary: str,
         artifact: str | None = None,
     ) -> None:
         table = self.query_one("#results", DataTable)
-        key = f"{source}::{index}"
+        # keyed by *which run* and which step, never by the source's text:
+        # `repo-a, repo-a` is a legal thing to type, and two rows for one
+        # source must not collide (a DuplicateKey here used to kill the run).
+        key = f"{run}::{index}"
         styled = Text(fate, style="bold red") if fate in ("failed", "CURSED") else Text(fate)
         table.add_row(source, label, styled, summary, key=key)
         if artifact is not None:
@@ -492,11 +516,12 @@ class CovenScreen(Screen[None]):
 
     def _run_done(self, total: int, ok: int, failed: int) -> None:
         self._rite_running = False
-        self.query_one(ScytheSpinner).stop()
-        note = f"performed {ok}/{total} step-runs"
-        if failed:
-            note += f", {failed} failed"
-        self._status(note + " - select a row to read its artifact")
+        with contextlib.suppress(NoMatches):  # the chamber may already be gone
+            self.query_one(ScytheSpinner).stop()
+            note = f"performed {ok}/{total} step-runs"
+            if failed:
+                note += f", {failed} failed"
+            self._status(note + " - select a row to read its artifact")
 
     @on(DataTable.RowSelected, "#results")
     def _row_selected(self, event: DataTable.RowSelected) -> None:

@@ -9,7 +9,7 @@ from a ritual's textual-free OptSpec tuple.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from textual import on
 from textual.app import ComposeResult
@@ -21,7 +21,7 @@ from textual.widget import AwaitMount, Widget
 from textual.widgets import Button, DirectoryTree, Input, Label, Select, Static, Switch
 
 from git_reaper import art
-from git_reaper.tui_ops import ChoiceOpt, NumberOpt, Operation, ToggleOpt
+from git_reaper.tui_ops import ChoiceOpt, FloatOpt, NumberOpt, Operation, ToggleOpt
 
 _SCYTHE = art.SCYTHE_FRAMES
 
@@ -111,22 +111,88 @@ class SaveScreen(ModalScreen[str | None]):
 
 
 class BrowseScreen(ModalScreen[str | None]):
-    """A directory tree to pick a local source. Returns the path, or None."""
+    """A directory tree to pick a local source. Returns the path, or None.
+
+    The tree only ever walks *down* from its root, so the root can move: `up`
+    re-roots at the parent (climbing out of a deep crypt), and typing a path
+    re-roots anywhere. Selecting a directory marks it as the pick and expands
+    it -- it does not dismiss, so you can keep descending -- and `choose`
+    returns whatever is currently marked (the root itself, if nothing else).
+    """
+
+    BINDINGS = [
+        ("escape", "cancel", "Cancel"),
+        ("u,backspace", "up", "Up"),
+        ("c", "choose", "Choose"),
+    ]
 
     def __init__(self, start: str = ".") -> None:
         super().__init__()
-        self._start = start if Path(start).is_dir() else "."
+        self._root = self._nearest_crypt(start)
+        self._picked = self._root
+
+    @staticmethod
+    def _nearest_crypt(start: str) -> Path:
+        """The deepest real directory at or above `start` -- a half-typed or
+        vanished source still opens the browser somewhere sensible."""
+        path = Path(start or ".").expanduser()
+        while not path.is_dir() and path != path.parent:
+            path = path.parent
+        return path.resolve() if path.is_dir() else Path.cwd()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="browse"):
             yield Label("choose a crypt to reap:")
-            yield DirectoryTree(self._start, id="tree")
+            with Horizontal(id="browse-row"):
+                yield Button("up", id="up")
+                yield Input(value=str(self._root), id="browse-path")
+            yield DirectoryTree(str(self._root), id="tree")
+            yield Label("u  up      c  choose      escape  cancel", id="browse-hint")
             with Horizontal(id="dialog-buttons"):
+                yield Button("choose", id="choose", variant="primary")
                 yield Button("cancel", id="cancel")
 
+    def _reroot(self, path: Path) -> None:
+        self._root = path
+        self._picked = path
+        self.query_one("#tree", DirectoryTree).path = str(path)
+        self.query_one("#browse-path", Input).value = str(path)
+
+    def action_up(self) -> None:
+        parent = self._root.parent
+        if parent == self._root:  # already at the root of the filesystem
+            self.notify("no crypt lies above this one", severity="warning")
+            return
+        self._reroot(parent)
+
+    def action_choose(self) -> None:
+        self.dismiss(str(self._picked))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed, "#up")
+    def _up_button(self) -> None:
+        self.action_up()
+
+    @on(Input.Submitted, "#browse-path")
+    def _typed_path(self, event: Input.Submitted) -> None:
+        path = Path(event.value.strip() or ".").expanduser()
+        if not path.is_dir():
+            self.notify(f"no such crypt: {event.value}", severity="error")
+            return
+        self._reroot(path.resolve())
+
     @on(DirectoryTree.DirectorySelected)
-    def _picked(self, event: DirectoryTree.DirectorySelected) -> None:
-        self.dismiss(str(event.path))
+    def _picked_dir(self, event: DirectoryTree.DirectorySelected) -> None:
+        # marks the pick and lets the tree expand; `choose` is what dismisses,
+        # so one click into a subfolder no longer ends the browse.
+        self._picked = event.path
+        self.query_one("#browse-path", Input).value = str(event.path)
+
+    @on(Button.Pressed, "#choose")
+    def _choose_button(self) -> None:
+        self.action_choose()
 
     @on(Button.Pressed, "#cancel")
     def _cancel(self) -> None:
@@ -185,15 +251,17 @@ def mount_option_widgets(panel: VerticalScroll, op: Operation) -> AwaitMount:
                 ),
                 classes="opt-row",
             )
-        else:  # NumberOpt or TextOpt
+        else:  # NumberOpt, FloatOpt, TextOpt, or ListOpt
             default = "" if getattr(spec, "default", None) is None else str(spec.default)
+            kind: Literal["integer", "number", "text"] = "text"
+            if isinstance(spec, NumberOpt):
+                kind = "integer"
+            elif isinstance(spec, FloatOpt):
+                kind = "number"
+            # TextOpt and ListOpt stay "text" -- a ListOpt's tokens split on read
             row = Horizontal(
                 Label(spec.label),
-                Input(
-                    value=default,
-                    type="integer" if isinstance(spec, NumberOpt) else "text",
-                    id=f"opt-{spec.name}",
-                ),
+                Input(value=default, type=kind, id=f"opt-{spec.name}"),
                 classes="opt-row",
             )
         rows.append(row)

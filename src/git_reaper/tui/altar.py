@@ -8,6 +8,7 @@ worker thread, save exactly what you see.
 from __future__ import annotations
 
 import contextlib
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -31,9 +32,8 @@ from textual.widgets import (
 )
 from textual.widgets.option_list import Option
 
-from git_reaper import __version__
+from git_reaper import __version__, incant
 from git_reaper.config import GrimoireError, load_grimoire
-from git_reaper.core.source import resolve_source
 from git_reaper.gitio import default_backend
 from git_reaper.models import Recipe
 from git_reaper.tui.widgets import (
@@ -44,7 +44,14 @@ from git_reaper.tui.widgets import (
     collect_option_values,
     mount_option_widgets,
 )
-from git_reaper.tui_ops import GROUPS, OPERATIONS, OPERATIONS_BY_KEY, Operation, ReapResult
+from git_reaper.tui_ops import (
+    GROUPS,
+    OPERATIONS,
+    OPERATIONS_BY_KEY,
+    Operation,
+    ReapResult,
+    resolve,
+)
 
 _HELP = (
     "[b]the altar[/b]\n"
@@ -88,6 +95,7 @@ class AltarScreen(Screen[None]):
         self._show_descriptions: bool = False
         self._options_ready: AwaitMount | None = None
         self._is_repo: bool = True  # last inspected source; repopulating regrays from this
+        self._inspecting: str = ""  # the source whose inspection we are waiting on
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -142,6 +150,17 @@ class AltarScreen(Screen[None]):
                     if self._show_descriptions:
                         prompt += f"\n  [dim]{op.description}[/dim]"
                     ops.add_option(Option(prompt, id=op.key))
+        # index 0 is a group header, so an unhighlighted list would show the
+        # current ritual in the options panel but nowhere in the list itself.
+        self._highlight(self.current_op.key)
+
+    def _highlight(self, key: str) -> None:
+        """Move the list's highlight onto a ritual, by key."""
+        ops = self.query_one("#operations", OptionList)
+        for index in range(ops.option_count):
+            if ops.get_option_at_index(index).id == key:
+                ops.highlighted = index
+                return
 
     def _load_recipes(self) -> None:
         try:
@@ -183,11 +202,7 @@ class AltarScreen(Screen[None]):
     def set_operation(self, key: str) -> None:
         """Select a ritual by key, rebuild its options, and move the highlight
         onto it (which itself applies it, via the highlight handler)."""
-        ops = self.query_one("#operations", OptionList)
-        for index in range(ops.option_count):
-            if ops.get_option_at_index(index).id == key:
-                ops.highlighted = index
-                break
+        self._highlight(key)
         self._apply_operation(OPERATIONS_BY_KEY[key])
 
     @on(OptionList.OptionHighlighted, "#operations")
@@ -208,47 +223,30 @@ class AltarScreen(Screen[None]):
         if not self._recipes or event.option.id is None:
             return
         recipe = self._recipes[int(event.option.id.split(":")[1])]
-        source = next((a for a in recipe.args if not a.startswith("-")), ".")
-        self.query_one("#source", Input).value = source
-        if recipe.command in OPERATIONS_BY_KEY:
-            self.set_operation(recipe.command)
-            if self._options_ready is not None:
-                await self._options_ready  # the panel must exist before the flags land
-            self._apply_recipe_options(recipe)
-        incantation = " ".join(["reaper", recipe.command, *recipe.args])
+        incantation = shlex.join(["reaper", recipe.command, *recipe.args])
+        # the console's parser, not a hand-rolled flag map: a recipe's flags
+        # land on the widgets they truly mean, and new flags need no second list.
+        spell = incant.parse(incantation)
+        if spell.kind != "ritual" or spell.op is None:
+            self._status(f"{recipe.name} is not a chamber ritual: {spell.error or recipe.command}")
+            return
+        self.query_one("#source", Input).value = spell.source
+        self.set_operation(spell.op.key)
+        if self._options_ready is not None:
+            await self._options_ready  # the panel must exist before the flags land
+        self._apply_recipe_options(dict(spell.opts))
         self._status(f"loaded {recipe.name}: {incantation}  (press r to reap)")
 
-    def _apply_recipe_options(self, recipe: Recipe) -> None:
-        """Best-effort: map a recipe's flags onto the options panel widgets."""
-        flags = {
-            "--limit": "limit",
-            "-n": "limit",
-            "--lens": "lens",
-            "--than": "than",
-            "--min-size": "min_size",
-            "--format": "format",
-            "-f": "format",
-        }
-        toggles = {
-            "--heatmap": "heatmap",
-            "--changelog": "changelog",
-            "--age": "age",
-            "--no-entropy": "no_entropy",
-            "--offline": "offline",
-        }
-        names = {spec.name for spec in self.current_op.options}
-        args = recipe.args
-        for i, arg in enumerate(args):
-            if arg in toggles and toggles[arg] in names:
-                self._set_opt_widget(toggles[arg], True)
-            elif arg in flags and flags[arg] in names and i + 1 < len(args):
-                self._set_opt_widget(flags[arg], args[i + 1])
-
-    def _set_opt_widget(self, name: str, value: Any) -> None:
-        # a recipe flag that does not fit its widget (bad value, wrong type) is
-        # harmless -- the panel keeps its default and the incantation still shows.
-        with contextlib.suppress(Exception):
-            self.query_one(f"#opt-{name}").value = value  # type: ignore[attr-defined]
+    def _apply_recipe_options(self, opts: dict[str, Any]) -> None:
+        """Set the options panel's widgets from a parsed recipe's values."""
+        for name, value in opts.items():
+            # a value that does not fit its widget is harmless -- the panel keeps
+            # its default and the incantation still shows what was asked for.
+            if value is None:
+                continue
+            with contextlib.suppress(Exception):
+                widget = self.query_one(f"#opt-{name}")
+                widget.value = value if isinstance(value, bool) else str(value)  # type: ignore[attr-defined]
 
     @on(Button.Pressed, "#reap")
     def _reap_button(self) -> None:
@@ -269,6 +267,7 @@ class AltarScreen(Screen[None]):
 
     def _inspect_source(self, source: str) -> None:
         source = source.strip()
+        self._inspecting = source  # the only answer we still want to hear
         try:
             hint = self.query_one("#source-hint", Label)
         except NoMatches:  # a modal is up, or the app is tearing down
@@ -283,15 +282,21 @@ class AltarScreen(Screen[None]):
     def _inspect_worker(self, source: str) -> None:
         path = Path(source).expanduser()
         if not path.exists():
-            self.app.call_from_thread(self._show_source_state, f"no such path: {source}", False)
-            return
-        is_repo = default_backend().is_repo(path)
-        note = "git repo" if is_repo else "plain folder (history rituals will fail)"
-        self.app.call_from_thread(self._show_source_state, note, is_repo)
+            note, is_repo = f"no such path: {source}", False
+        else:
+            is_repo = default_backend().is_repo(path)
+            note = "git repo" if is_repo else "plain folder (history rituals will fail)"
+        self.app.call_from_thread(self._show_source_state, source, note, is_repo)
 
-    def _show_source_state(self, note: str, is_repo: bool) -> None:
-        # a thread callback can land after a modal opens or the app stops;
-        # if the base screen's widgets are gone, quietly skip.
+    def _show_source_state(self, source: str, note: str, is_repo: bool) -> None:
+        # An exclusive worker cancels its predecessor, but a *thread* keeps
+        # running to the end and still calls back -- so a slow answer about a
+        # source you have already moved on from can land last. Drop it: the
+        # hint would lie, and the git-state graying follows the hint.
+        if source != self._inspecting:
+            return
+        # a callback can also land after a modal opens or the app stops; if the
+        # base screen's widgets are gone, quietly skip.
         try:
             self.query_one("#source-hint", Label).update(note)
         except NoMatches:
@@ -325,13 +330,7 @@ class AltarScreen(Screen[None]):
     def action_toggle_descriptions(self) -> None:
         """Flip the rituals list between roomy (name + description) and compact."""
         self._show_descriptions = not self._show_descriptions
-        current = self.current_op.key
-        self._populate_operations()
-        ops = self.query_one("#operations", OptionList)
-        for index in range(ops.option_count):
-            if ops.get_option_at_index(index).id == current:
-                ops.highlighted = index
-                break
+        self._populate_operations()  # re-highlights the current ritual
         self._apply_git_state(self._is_repo)
 
     def action_reap(self) -> None:
@@ -345,13 +344,20 @@ class AltarScreen(Screen[None]):
     @work(thread=True, exclusive=True)
     def _reap_worker(self, source: str, op: Operation, opts: dict[str, Any]) -> None:
         try:
-            resolved = resolve_source(source, depth=None)
+            resolved = resolve(source, opts)  # the ritual's --ref rides along
             self.app.call_from_thread(self.query_one(ScytheSpinner).stage, f"reaping {op.key}")
             result = op.run(resolved.repo, opts)
+            self.app.call_from_thread(self._show_result, op.key, result, opts.get("format", "md"))
         except Exception as exc:  # surface the plain cause; never hide it
             self.app.call_from_thread(self._show_error, str(exc))
-            return
-        self.app.call_from_thread(self._show_result, op.key, result, opts.get("format", "md"))
+        finally:
+            # the scythe stops however this ended -- a failed render used to
+            # leave it swinging over a dead worker, which reads as a hang.
+            self.app.call_from_thread(self._stop_scythe)
+
+    def _stop_scythe(self) -> None:
+        with contextlib.suppress(NoMatches):  # a modal is up, or the app is gone
+            self.query_one(ScytheSpinner).stop()
 
     def action_browse(self) -> None:
         current = self.query_one("#source", Input).value.strip() or "."
@@ -406,7 +412,6 @@ class AltarScreen(Screen[None]):
     # -- worker callbacks (main thread) ------------------------------------
 
     def _show_result(self, key: str, result: ReapResult, fmt: str) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._artifact = result.text
         self._last_format = fmt
         self._rendered = False
@@ -430,7 +435,6 @@ class AltarScreen(Screen[None]):
             rendered.display = False
 
     def _show_error(self, message: str) -> None:
-        self.query_one(ScytheSpinner).stop()
         self._badge_off()
         self._status(f"the ritual failed: {message}")
         self.notify(message, severity="error", title="the ritual failed")
